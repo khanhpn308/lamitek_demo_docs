@@ -379,6 +379,63 @@ Bạn nên thấy backend **vừa khởi động lại** (thời gian “Up” n
 - Nếu nhánh mặc định trên GitHub không phải `main`, thay `main` bằng tên nhánh đúng (ví dụ `master`).
 - Sao lưu (`mysqldump`) trước khi chạy migration trên production nếu thay đổi schema có rủi ro.
 
+### 8.7 Checklist deploy nhanh trên EC2 (chạy một lần)
+
+Mục tiêu: cập nhật `app_service`, restart backend để nạp mã Python mới, và verify nhanh các endpoint quan trọng.
+
+```bash
+# 0) SSH vào EC2 App
+ssh -i <key.pem> ec2-user@<PUBLIC_IP_APP>
+
+# 1) Cập nhật mã
+cd ~/app_service
+git fetch origin
+git pull origin main
+
+# 2) Build frontend + bảo đảm service chạy
+docker compose up -d --build
+
+# 3) Bắt buộc restart backend để nạp code Python mới
+docker compose restart backend
+
+# 4) Kiểm tra nhanh container
+docker compose ps
+docker compose logs backend --tail 80
+```
+
+Verify endpoint (ngay trên máy App):
+
+```bash
+# Health
+curl -i http://127.0.0.1:8000/api/health
+
+# DB health
+curl -i http://127.0.0.1:8000/api/health/db
+```
+
+Verify endpoint mới liên quan quyền/xóa thiết bị:
+
+```bash
+# Lấy token admin (điền đúng username/password)
+TOKEN=$(curl -s -X POST http://127.0.0.1:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"AD00000","password":"<ADMIN_PASSWORD>"}' | python3 -c "import sys, json; print(json.load(sys.stdin).get('access_token',''))")
+
+# Kiểm tra danh sách user có field authorized_devices
+curl -s http://127.0.0.1:8000/api/users \
+  -H "Authorization: Bearer $TOKEN"
+
+# Kiểm tra route xóa device đã có (không còn 405 Method Not Allowed).
+# Dùng ID test/sandbox để tránh xóa nhầm dữ liệu production.
+curl -i -X DELETE "http://127.0.0.1:8000/api/devices/<DEVICE_ID_TEST>" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Kỳ vọng:
+- `/api/health` trả `200`.
+- `/api/users` trả JSON có `authorized_devices` trên từng user (hoặc frontend đã fallback nếu backend cũ).
+- `DELETE /api/devices/{id}` không trả `405`; kết quả hợp lệ thường là `204` (xóa thành công), `404` (không tồn tại), hoặc `403` (không đủ quyền).
+
 ## 9. Kiểm tra sau triển khai
 
 - API health: `http://<server-ip>:8000/api/health` (nếu backend được publish port)

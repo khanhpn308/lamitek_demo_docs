@@ -1,4 +1,4 @@
-# Bộ Tài Liệu Dự Án (Chuẩn Nội Bộ)
+# Bộ Tài Liệu Dự Án
 
 Tài liệu được chuẩn hóa theo 3 nhóm định dạng:
 
@@ -21,6 +21,7 @@ Tài liệu được chuẩn hóa theo 3 nhóm định dạng:
 - `docs/changelogs.md`: Nhật ký thay đổi tính năng / API liên quan tài liệu.
 - `docs/guidelines/frontend-guidelines.md`: Quy định kiến trúc và coding guideline cho Frontend.
 - `docs/guidelines/backend-guidelines.md`: Quy định kiến trúc và coding guideline cho Backend.
+- `docs/guidelines/git-github-teamwork.md`: Hướng dẫn Git/GitHub khi làm việc nhóm (branch, fetch/pull, đồng bộ remote, xử lý conflict và các tình huống thường gặp).
 - `docs/adr/ADR-0001-kien-truc-tong-the.md`: ADR kiến trúc tổng thể.
 - `docs/adr/ADR-0002-chien-luoc-xac-thuc-phan-quyen.md`: ADR xác thực và phân quyền.
 - `docs/adr/ADR-0003-chien-luoc-du-lieu-thiet-bi-realtime.md`: ADR dữ liệu realtime.
