@@ -1,4 +1,4 @@
-# Bộ Tài Liệu Dự Án (Chuẩn Nội Bộ)
+# Bộ Tài Liệu Dự Án
 
 Tài liệu được chuẩn hóa theo 3 nhóm định dạng:
 
