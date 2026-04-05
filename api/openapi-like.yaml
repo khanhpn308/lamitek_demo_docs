@@ -288,17 +288,64 @@ paths:
                 $ref: '#/components/schemas/DeviceDetailPublic'
         '404':
           description: Không tìm thấy hoặc không có quyền truy cập
+    patch:
+      tags: [devices]
+      summary: Cập nhật một phần thiết bị (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: device_id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdate'
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicePublic'
+        '404':
+          description: Không tìm thấy thiết bị
+    delete:
+      tags: [devices]
+      summary: Xóa thiết bị và mọi phân quyền liên quan (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: device_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Đã xóa
+        '404':
+          description: Không tìm thấy thiết bị
 
   /api/authorizations:
     get:
       tags: [authorizations]
-      summary: Danh sách phân quyền theo user (admin)
+      summary: Danh sách phân quyền theo user hoặc theo thiết bị (admin)
       security:
         - bearerAuth: []
       parameters:
         - in: query
           name: user_id
-          required: true
+          required: false
+          schema:
+            type: integer
+        - in: query
+          name: device_id
+          required: false
           schema:
             type: integer
       responses:
@@ -310,6 +357,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/AuthorizationPublic'
+        '400':
+          description: Thiếu tham số hoặc truyền cả user_id và device_id
     post:
       tags: [authorizations]
       summary: Tạo phân quyền user-thiết bị (admin)
@@ -445,6 +494,11 @@ components:
           type: integer
         remaining_days:
           type: integer
+        authorized_devices:
+          type: array
+          description: Danh sách thiết bị đã phân quyền (GET /users, admin)
+          items:
+            $ref: '#/components/schemas/AuthorizedDeviceBrief'
     TokenResponse:
       type: object
       properties:
@@ -503,6 +557,12 @@ components:
         status:
           type: string
           nullable: true
+        location:
+          type: string
+          nullable: true
+        device_type:
+          type: string
+          nullable: true
     DeviceDetailPublic:
       type: object
       properties:
@@ -515,6 +575,58 @@ components:
           nullable: true
         password:
           type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        device_type:
+          type: string
+          nullable: true
+        user_device_asignment_id:
+          type: integer
+          nullable: true
+          description: Chỉ có trong JSON khi caller là admin; user thường nhận null
+        authorized_users:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceAuthorizedUser'
+    DeviceAuthorizedUser:
+      type: object
+      properties:
+        user_id: { type: integer }
+        username: { type: string }
+        fullname: { type: string }
+        expired_at:
+          type: string
+          format: date
+          nullable: true
+    AuthorizedDeviceBrief:
+      type: object
+      properties:
+        device_id: { type: integer }
+        devicename:
+          type: string
+          nullable: true
+    DeviceUpdate:
+      type: object
+      properties:
+        devicename:
+          type: string
+          nullable: true
+        password:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        device_type:
+          type: string
+          nullable: true
+        user_device_asignment_id:
+          type: integer
           nullable: true
     AuthorizationCreate:
       type: object

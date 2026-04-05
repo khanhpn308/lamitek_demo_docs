@@ -41,7 +41,8 @@
 ## 3. Nhóm Users (admin)
 
 ### GET `/users`
-- Trả danh sách user.
+- Trả danh sách user (admin).
+- Mỗi phần tử có thêm `authorized_devices`: danh sách `{ device_id, devicename }` — các thiết bị đã phân quyền RBAC cho user đó.
 
 ### PATCH `/users/{user_id}`
 - Cập nhật `status` (`active`/`deactive`).
@@ -64,11 +65,22 @@
 ### GET `/devices/{device_id}`
 - Admin xem tất cả.
 - User thường chỉ xem thiết bị có quyền.
+- Response bổ sung:
+  - `authorized_users`: danh sách user được phân quyền RBAC (`user_id`, `username`, `fullname`, `expired_at`).
+  - `user_device_asignment_id`: chỉ có giá trị thật khi caller là **admin**; user thường nhận `null` (không lộ trường legacy).
+
+### PATCH `/devices/{device_id}` (admin)
+- Cập nhật một phần thiết bị, gồm `user_device_asignment_id` (gán tài khoản legacy trên bản ghi thiết bị).
+
+### DELETE `/devices/{device_id}` (admin)
+- Xóa thiết bị; xóa trước các dòng `device_authorization` liên quan, sau đó xóa `device`.
 
 ## 5. Nhóm Authorizations (admin)
 
-### GET `/authorizations?user_id={id}`
-- Lấy danh sách thiết bị đã cấp cho user.
+### GET `/authorizations?user_id={id}` hoặc `?device_id={id}`
+- Cần **đúng một** tham số `user_id` **hoặc** `device_id`.
+- `user_id`: các phân quyền của user đó.
+- `device_id`: các phân quyền gắn với thiết bị đó.
 
 ### POST `/authorizations`
 - Tạo phân quyền user-thiết bị.
