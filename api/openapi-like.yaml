@@ -1,0 +1,551 @@
+openapi: 3.0.3
+info:
+  title: IoT Backend API (OpenAPI-like)
+  version: 1.0.0
+  description: >
+    Đặc tả API dạng OpenAPI-like cho hệ thống quản lý IoT.
+    Tài liệu này phản ánh các endpoint hiện có trong backend FastAPI.
+servers:
+  - url: http://localhost:8000
+    description: Môi trường local
+tags:
+  - name: auth
+  - name: users
+  - name: devices
+  - name: authorizations
+  - name: health
+  - name: mqtt
+paths:
+  /api/health:
+    get:
+      tags: [health]
+      summary: Kiểm tra health tổng quát
+      responses:
+        '200':
+          description: Thành công
+  /api/health/db:
+    get:
+      tags: [health]
+      summary: Kiểm tra kết nối cơ sở dữ liệu
+      responses:
+        '200':
+          description: DB hoạt động bình thường
+        '503':
+          description: DB không khả dụng
+
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Đăng nhập
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Đăng nhập thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Sai thông tin đăng nhập
+        '403':
+          description: Tài khoản bị vô hiệu hóa
+
+  /api/auth/register:
+    post:
+      tags: [auth]
+      summary: Tạo tài khoản mới (admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Tạo tài khoản thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPublic'
+        '400':
+          description: Dữ liệu không hợp lệ hoặc trùng
+        '403':
+          description: Không có quyền admin
+
+  /api/auth/bootstrap:
+    post:
+      tags: [auth]
+      summary: Khởi tạo admin đầu tiên khi chưa có user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BootstrapRequest'
+      responses:
+        '200':
+          description: Tạo admin đầu tiên thành công
+        '403':
+          description: Đã có user, bootstrap bị khóa
+
+  /api/auth/me:
+    get:
+      tags: [auth]
+      summary: Lấy thông tin user hiện tại
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPublic'
+        '401':
+          description: Chưa xác thực
+
+  /api/auth/recover-password:
+    post:
+      tags: [auth]
+      summary: Khôi phục mật khẩu bằng username + CCCD
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoverPasswordRequest'
+      responses:
+        '200':
+          description: Cấp mật khẩu tạm mới
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoverPasswordResponse'
+        '400':
+          description: Sai thông tin xác thực
+
+  /api/auth/change-password:
+    post:
+      tags: [auth]
+      summary: Đổi mật khẩu
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Đổi mật khẩu thành công
+        '400':
+          description: Dữ liệu không hợp lệ
+        '401':
+          description: Chưa xác thực
+
+  /api/users:
+    get:
+      tags: [users]
+      summary: Danh sách user (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserPublic'
+        '403':
+          description: Không có quyền admin
+
+  /api/users/{user_id}:
+    patch:
+      tags: [users]
+      summary: Cập nhật trạng thái user (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserStatusPatch'
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPublic'
+        '404':
+          description: Không tìm thấy user
+    delete:
+      tags: [users]
+      summary: Xóa user (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Xóa thành công
+        '400':
+          description: Không thể xóa chính mình
+        '404':
+          description: Không tìm thấy user
+
+  /api/devices:
+    get:
+      tags: [devices]
+      summary: Danh sách thiết bị (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DevicePublic'
+    post:
+      tags: [devices]
+      summary: Tạo thiết bị mới (admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCreate'
+      responses:
+        '201':
+          description: Tạo thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicePublic'
+        '409':
+          description: Thiết bị đã tồn tại
+
+  /api/devices/my:
+    get:
+      tags: [devices]
+      summary: Danh sách thiết bị theo user hiện tại
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DevicePublic'
+
+  /api/devices/{device_id}:
+    get:
+      tags: [devices]
+      summary: Chi tiết thiết bị
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: device_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceDetailPublic'
+        '404':
+          description: Không tìm thấy hoặc không có quyền truy cập
+
+  /api/authorizations:
+    get:
+      tags: [authorizations]
+      summary: Danh sách phân quyền theo user (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: user_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuthorizationPublic'
+    post:
+      tags: [authorizations]
+      summary: Tạo phân quyền user-thiết bị (admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizationCreate'
+      responses:
+        '201':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationPublic'
+        '409':
+          description: Phân quyền đã tồn tại
+
+  /api/mqtt/status:
+    get:
+      tags: [mqtt]
+      summary: Trạng thái MQTT subscriber
+      responses:
+        '200':
+          description: Thành công
+        '503':
+          description: MQTT chưa được khởi tạo
+
+  /api/mqtt/messages:
+    get:
+      tags: [mqtt]
+      summary: Danh sách message MQTT gần nhất
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+      responses:
+        '200':
+          description: Thành công
+        '503':
+          description: MQTT chưa được khởi tạo
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+    RegisterRequest:
+      type: object
+      required: [username, password, fullname, cccd, expired_at, role]
+      properties:
+        username: { type: string }
+        password: { type: string }
+        fullname: { type: string }
+        cccd:
+          type: string
+          description: CCCD 12 chữ số
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: integer
+          nullable: true
+        expired_at:
+          type: string
+          format: date
+        role:
+          type: string
+          enum: [admin, user]
+    BootstrapRequest:
+      type: object
+      required: [username, password, fullname, cccd]
+      properties:
+        username: { type: string }
+        password: { type: string }
+        fullname: { type: string }
+        cccd: { type: string }
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: integer
+          nullable: true
+        expired_at:
+          type: string
+          format: date
+          nullable: true
+    UserPublic:
+      type: object
+      properties:
+        user_id: { type: integer }
+        username: { type: string }
+        fullname: { type: string }
+        cccd: { type: string }
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: integer
+          nullable: true
+        creat_at:
+          type: string
+          format: date
+        expired_at:
+          type: string
+          format: date
+          nullable: true
+        status:
+          type: string
+          enum: [active, deactive]
+        role:
+          type: string
+          enum: [admin, user]
+        validity_days:
+          type: integer
+        remaining_days:
+          type: integer
+    TokenResponse:
+      type: object
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, example: bearer }
+        user:
+          $ref: '#/components/schemas/UserPublic'
+    RecoverPasswordRequest:
+      type: object
+      required: [username, cccd]
+      properties:
+        username: { type: string }
+        cccd: { type: string }
+    RecoverPasswordResponse:
+      type: object
+      properties:
+        message: { type: string }
+        temporary_password: { type: string }
+    ChangePasswordRequest:
+      type: object
+      required: [current_password, new_password, confirm_password]
+      properties:
+        current_password: { type: string }
+        new_password: { type: string }
+        confirm_password: { type: string }
+    UserStatusPatch:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [active, deactive]
+    DeviceCreate:
+      type: object
+      required: [device_id, user_device_asignment_id]
+      properties:
+        device_id: { type: integer }
+        devicename:
+          type: string
+          nullable: true
+        password:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        user_device_asignment_id:
+          type: integer
+    DevicePublic:
+      type: object
+      properties:
+        device_id: { type: integer }
+        devicename:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+    DeviceDetailPublic:
+      type: object
+      properties:
+        device_id: { type: integer }
+        devicename:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        password:
+          type: string
+          nullable: true
+    AuthorizationCreate:
+      type: object
+      required: [device_id, user_id]
+      properties:
+        device_id: { type: integer }
+        user_id: { type: integer }
+        granted_at:
+          type: string
+          format: date
+          nullable: true
+        granted_by:
+          type: string
+          nullable: true
+        expired_at:
+          type: string
+          format: date
+          nullable: true
+    AuthorizationPublic:
+      type: object
+      properties:
+        device_id: { type: integer }
+        user_id: { type: integer }
+        granted_at:
+          type: string
+          format: date
+          nullable: true
+        granted_by:
+          type: string
+          nullable: true
+        expired_at:
+          type: string
+          format: date
+          nullable: true
