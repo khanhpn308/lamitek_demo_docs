@@ -2,7 +2,7 @@
 
 - **Mã tài liệu**: ARCH-IOT-001
 - **Phiên bản**: 1.0.0
-- **Ngày cập nhật**: 2026-04-04
+- **Ngày cập nhật**: 2026-04-06
 
 ## 1. Mục tiêu kiến trúc
 
@@ -85,3 +85,8 @@ flowchart LR
   - **Hướng xử lý**: Bổ sung WebSocket gateway hoặc SSE trong backend.
 - **Rủi ro**: Một số màn hình còn phụ thuộc mock data fallback.
   - **Hướng xử lý**: Chuẩn hóa toàn bộ luồng sang API thật.
+
+## 7. Đọc thêm: hướng dẫn chi tiết trong mã nguồn
+
+- **[codebase-walkthrough.md](./codebase-walkthrough.md)** — thuật ngữ (JWT, RBAC, MQTT, …), bản đồ thư mục `app_service/`, thứ tự đọc file khi onboarding hoặc sau thời gian không chạm code.
+- Trong repo, các module Python chính có **module docstring**; hàm/route quan trọng có **docstring** giải thích vai trò. Frontend: **JSDoc** tại `main.jsx`, `App.jsx`, `IoTApp.jsx`, `AuthContext.jsx`, `lib/api.js`, các route guard và `Layout.jsx`.

@@ -1,5 +1,16 @@
 # Changelog (docs)
 
+## 2026-04-06
+
+- **Docs**
+  - Thêm `docs/architecture/codebase-walkthrough.md`: thuật ngữ/viết tắt (JWT, RBAC, MQTT, CCCD, …), bản đồ thư mục `app_service/`, thứ tự đọc code, bảng biến môi trường, file “mỏ neo” khi debug.
+  - Cập nhật `docs/architecture/system-architecture.md` (mục 7): liên kết walkthrough và mô tả docstring/JSDoc trong repo.
+- **Mã nguồn (comment / docstring)**
+  - Backend (`app_service/backend/app/`): module docstring + docstring hàm/lớp cho `main`, `core` (config, db, deps, security, db_wait, mqtt_subscriber, user_expiry), `api/*`, `models/*`, `schemas/*` (bổ sung đầu file / class nơi cần).
+  - Frontend: JSDoc/ghi chú đầu file cho `main.jsx`, `App.jsx`, `IoTApp.jsx`, `AuthContext.jsx`, `lib/api.js`, `lib/base-url.ts`, `ProtectedRoute.jsx`, `AdminRoute.jsx`, `Layout.jsx`.
+  - Thêm `app_service/src/components/ui/README.md` (giải thích thư mục shadcn/ui, không doc từng file primitive).
+  - Ghi chú đầu file `app_service/vite.config.js` (proxy API khi dev).
+
 ## 2026-04-05
 
 - **Backend**
