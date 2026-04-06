@@ -18,6 +18,7 @@ Tài liệu được chuẩn hóa theo 3 nhóm định dạng:
 - `docs/deployment/mysql-linux-operations.md`: Vào MySQL trên Linux (root/user Docker), lọc dữ liệu, cập nhật và sao lưu an toàn.
 - `docs/api/openapi-like.yaml`: Đặc tả API theo kiểu OpenAPI.
 - `docs/api/api-documentation.md`: Diễn giải API cho đội phát triển và kiểm thử.
+- `docs/app_service-functions.md`: Danh sách function trong source `app_service/backend/app` và `app_service/src`.
 - `docs/changelogs.md`: Nhật ký thay đổi tính năng / API liên quan tài liệu.
 - `docs/guidelines/frontend-guidelines.md`: Quy định kiến trúc và coding guideline cho Frontend.
 - `docs/guidelines/backend-guidelines.md`: Quy định kiến trúc và coding guideline cho Backend.

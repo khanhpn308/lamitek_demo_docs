@@ -5,11 +5,28 @@
 - **Docs**
   - Thêm `docs/architecture/codebase-walkthrough.md`: thuật ngữ/viết tắt (JWT, RBAC, MQTT, CCCD, …), bản đồ thư mục `app_service/`, thứ tự đọc code, bảng biến môi trường, file “mỏ neo” khi debug.
   - Cập nhật `docs/architecture/system-architecture.md` (mục 7): liên kết walkthrough và mô tả docstring/JSDoc trong repo.
+  - Thêm `docs/app_service-functions.md`: liệt kê toàn bộ function trong phạm vi source `app_service/backend/app` và `app_service/src` (kèm line và loại function).
+- **Docker**
+  - Chuẩn hóa kết nối `app_service` ↔ `database_service` khi chạy bằng 2 compose riêng: dùng external network chung `iot-net` và `DB_HOST=db` (service name) thay vì `127.0.0.1`.
 - **Mã nguồn (comment / docstring)**
-  - Backend (`app_service/backend/app/`): module docstring + docstring hàm/lớp cho `main`, `core` (config, db, deps, security, db_wait, mqtt_subscriber, user_expiry), `api/*`, `models/*`, `schemas/*` (bổ sung đầu file / class nơi cần).
+  - Backend (`app_service/backend/app/`): module docstring + docstring hàm/lớp cho `main`, `core` (config, db, deps, security, db_wait, mqtt_subscriber, user_expiry), `api/`*, `models/*`, `schemas/*` (bổ sung đầu file / class nơi cần).
   - Frontend: JSDoc/ghi chú đầu file cho `main.jsx`, `App.jsx`, `IoTApp.jsx`, `AuthContext.jsx`, `lib/api.js`, `lib/base-url.ts`, `ProtectedRoute.jsx`, `AdminRoute.jsx`, `Layout.jsx`.
   - Thêm `app_service/src/components/ui/README.md` (giải thích thư mục shadcn/ui, không doc từng file primitive).
   - Ghi chú đầu file `app_service/vite.config.js` (proxy API khi dev).
+- **Frontend (Device types & dashboard)**
+  - Cập nhật `AddDeviceModal`: `deviceTypes` còn 3 loại chuẩn: `Nhiệt độ (Temperature)`, `Công suất (Power)`, `Độ rung (Vibration)`.
+  - Refactor `DeviceDetail` tab `Dashboard` thành biểu đồ theo loại cảm biến:
+    - `Temperature`: chỉ biểu đồ nhiệt độ `°C` theo thời gian.
+    - `Power`: biểu đồ `Voltage (V)` và `Current (A)` theo thời gian.
+    - `Vibration`: biểu đồ `mm/s` theo thời gian (line chart).
+  - Chuẩn hóa hiển thị `device_type` trên trang `Devices` theo 3 loại trên.
+  - Cập nhật `GlobalDashboard`:
+    - Hiển thị đủ 4 biểu đồ tổng quan `Current`, `Voltage`, `Temperature`, `Vibration` (trục X theo thiết bị, trục Y theo giá trị).
+    - Thiết bị chỉ đi vào đúng biểu đồ theo `device_type`: `Temperature` -> biểu đồ nhiệt độ; `Power` -> biểu đồ voltage/current; `Vibration` -> biểu đồ rung.
+    - Phạm vi dữ liệu theo quyền: admin xem toàn bộ, user xem thiết bị được phân quyền.
+    - Thêm cơ chế auto scale trục Y và tự giãn cột/nhãn theo số lượng thiết bị; thiết bị mới tự xuất hiện khi có dữ liệu realtime.
+    - Tối giản giao diện chart: ẩn nhãn thiết bị trên trục X, chỉ hiển thị tên thiết bị khi hover cột (tooltip).
+    - Bổ sung nút phóng to/thu nhỏ biểu đồ cho cả `GlobalDashboard` và tab `Dashboard` trong `DeviceDetail` (hỗ trợ thoát bằng `Esc` hoặc click nền).
 
 ## 2026-04-05
 

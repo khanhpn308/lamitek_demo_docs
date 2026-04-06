@@ -2,7 +2,7 @@
 
 - **Mã tài liệu**: UIUX-IOT-001
 - **Phiên bản**: 1.0.0
-- **Ngày cập nhật**: 2026-04-04
+- **Ngày cập nhật**: 2026-04-06
 
 ## 1. Mục tiêu trải nghiệm
 
@@ -48,8 +48,19 @@
 - Bảng cảnh báo mới nhất.
 
 ### 4.4 Global Dashboard
-- Biểu đồ realtime theo thiết bị.
-- Trạng thái trực tuyến (live).
+- Biểu đồ realtime tổng quan theo thiết bị (trục X: thiết bị, trục Y: giá trị).
+- Có đủ 4 biểu đồ: `Current (A)`, `Voltage (V)`, `Temperature (°C)`, `Vibration (mm/s)`.
+- Mapping biểu đồ theo loại thiết bị:
+  - Thiết bị `Temperature` chỉ xuất hiện ở biểu đồ `Temperature`.
+  - Thiết bị `Power` xuất hiện ở 2 biểu đồ `Voltage` và `Current`.
+  - Thiết bị `Vibration` chỉ xuất hiện ở biểu đồ `Vibration`.
+- Dữ liệu hiển thị theo quyền:
+  - Admin: tất cả thiết bị.
+  - User: chỉ thiết bị được phân quyền/quản lý.
+- Tự scale trục Y theo dữ liệu hiện tại của từng biểu đồ.
+- Tự giãn cột và nhãn trục X theo số lượng thiết bị; khi thêm thiết bị mới thì tự xuất hiện trên biểu đồ.
+- Ẩn nhãn tên thiết bị trên trục X (để giao diện gọn), tên thiết bị hiển thị trong tooltip khi hover vào cột.
+- Mỗi biểu đồ có nút phóng to/thu nhỏ toàn màn hình để quan sát chi tiết.
 
 ### 4.5 Devices
 - Danh sách thiết bị.
@@ -59,6 +70,17 @@
 ### 4.6 Device Detail
 - Tab `Account`, `History`, `Dashboard`.
 - Hiển thị thông tin định danh, lịch sử, biểu đồ chi tiết.
+- `Dashboard` theo loại cảm biến:
+  - `Temperature`: 1 biểu đồ miền thời gian cho nhiệt độ `°C`.
+  - `Power`: 2 biểu đồ miền thời gian cho `Voltage (V)` và `Current (A)`.
+  - `Vibration`: 1 biểu đồ miền thời gian cho `mm/s`.
+- Mỗi biểu đồ trong tab `Dashboard` có nút phóng to/thu nhỏ toàn màn hình.
+
+### 4.8 Add Device Modal
+- Danh sách `Device Type` gồm 3 loại:
+  - `Nhiệt độ (Temperature)`
+  - `Công suất (Power)`
+  - `Độ rung (Vibration)`
 
 ### 4.7 User Management (Admin)
 - Danh sách user.
