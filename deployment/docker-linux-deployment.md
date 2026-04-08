@@ -1,21 +1,22 @@
-# Hướng Dẫn Triển Khai Docker Trên Linux (App + Database)
+# Hướng Dẫn Triển Khai Docker Trên Linux (App + Database + InfluxDB)
 
 - Mã tài liệu: DEPLOY-IOT-001
-- Phiên bản: 1.6.6
-- Ngày cập nhật: 2026-04-07
+- Phiên bản: 1.6.7
+- Ngày cập nhật: 2026-04-08
 
 ## 1. Mục tiêu
 
 Tài liệu này hướng dẫn triển khai production trên máy chủ Linux cho cả:
 
 - `database_service` (MySQL)
+- `influxdb_service` (InfluxDB)
 - `app_service` (FastAPI + React/Nginx)
 
 ## 2. Nguồn mã nguồn trên GitHub (HTTPS)
 
-| Vai trò | URL clone (HTTPS) |
-|--------|-------------------|
-| Máy chủ ứng dụng (App) | `https://github.com/khanhpn308/app_service.git` |
+| Vai trò                          | URL clone (HTTPS)                                    |
+| -------------------------------- | ---------------------------------------------------- |
+| Máy chủ ứng dụng (App)           | `https://github.com/khanhpn308/app_service.git`      |
 | Máy chủ cơ sở dữ liệu (Database) | `https://github.com/khanhpn308/database_service.git` |
 
 Tham chiếu repository công khai:
@@ -65,10 +66,10 @@ Sau khi clone, tiếp tục cài Docker và triển khai theo các mục bên d�
 
 Trên AWS, mỗi Security Group có hai nhóm quy tắc độc lập:
 
-| Khái niệm (AWS) | Tiếng Việt thường dùng | Ý nghĩa |
-|-------------------|-------------------------|---------|
-| **Inbound rules** | Quy tắc **vào** (ingress) | Kiểm soát **lưu lượng đi vào** instance: **ai** được phép **kết nối tới** máy này, trên **cổng / giao thức** nào. Ví dụ: mở `443` để người dùng truy cập HTTPS; mở `3306` trên máy DB **chỉ** từ SG (hoặc IP) của máy App. |
-| **Outbound rules** | Quy tắc **ra** (egress) | Kiểm soát **lưu lượng đi ra** khỏi instance: máy này được phép **gửi** kết nối tới đâu (internet, dịch vụ AWS, máy khác trong VPC). Ví dụ: `git pull`, `docker pull`, truy vấn DNS, gọi API bên ngoài. |
+| Khái niệm (AWS)    | Tiếng Việt thường dùng    | Ý nghĩa                                                                                                                                                                                                                    |
+| ------------------ | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Inbound rules**  | Quy tắc **vào** (ingress) | Kiểm soát **lưu lượng đi vào** instance: **ai** được phép **kết nối tới** máy này, trên **cổng / giao thức** nào. Ví dụ: mở `443` để người dùng truy cập HTTPS; mở `3306` trên máy DB **chỉ** từ SG (hoặc IP) của máy App. |
+| **Outbound rules** | Quy tắc **ra** (egress)   | Kiểm soát **lưu lượng đi ra** khỏi instance: máy này được phép **gửi** kết nối tới đâu (internet, dịch vụ AWS, máy khác trong VPC). Ví dụ: `git pull`, `docker pull`, truy vấn DNS, gọi API bên ngoài.                     |
 
 **Gợi ý đọc bảng dưới:** các bảng cổng (SSH, HTTP, MySQL…) ở mục **4.2** và **4.3** là **Inbound**, trừ khi ghi rõ Outbound.
 
@@ -80,23 +81,23 @@ Trên AWS, mỗi Security Group có hai nhóm quy tắc độc lập:
 
 **Quy tắc Inbound (ingress):**
 
-| Loại | Cổng / Giao thức | Nguồn (Source) | Ghi chú |
-|------|-------------------|----------------|---------|
-| SSH | TCP `22` | IP quản trị cố định, VPN, hoặc bastion | Tránh mở `0.0.0.0/0` cho SSH trên môi trường production nếu có thể. |
-| HTTP | TCP `80` | `0.0.0.0/0` hoặc mạng khách hàng nội bộ | Phục vụ Nginx (frontend) theo `FRONTEND_HTTP_PORT` (thường map `80`). |
-| HTTPS | TCP `443` | `0.0.0.0/0` hoặc hạn chế theo nhu cầu | Khi bật TLS trên app server. |
-| API (tùy chọn) | TCP `8000` | Chỉ khi publish trực tiếp backend ra host | Mặc định nhiều stack chỉ expose qua Nginx; khi đó **không** cần mở `8000` ra internet. |
+| Loại           | Cổng / Giao thức | Nguồn (Source)                            | Ghi chú                                                                                |
+| -------------- | ---------------- | ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| SSH            | TCP `22`         | IP quản trị cố định, VPN, hoặc bastion    | Tránh mở `0.0.0.0/0` cho SSH trên môi trường production nếu có thể.                    |
+| HTTP           | TCP `80`         | `0.0.0.0/0` hoặc mạng khách hàng nội bộ   | Phục vụ Nginx (frontend) theo `FRONTEND_HTTP_PORT` (thường map `80`).                  |
+| HTTPS          | TCP `443`        | `0.0.0.0/0` hoặc hạn chế theo nhu cầu     | Khi bật TLS trên app server.                                                           |
+| API (tùy chọn) | TCP `8000`       | Chỉ khi publish trực tiếp backend ra host | Mặc định nhiều stack chỉ expose qua Nginx; khi đó **không** cần mở `8000` ra internet. |
 
-**Quy tắc Outbound (egress):** thường giữ mặc định *Allow all* (để `git pull`, `docker pull`, cập nhật gói, DNS). Có thể thu hẹp theo chính sách doanh nghiệp.
+**Quy tắc Outbound (egress):** thường giữ mặc định _Allow all_ (để `git pull`, `docker pull`, cập nhật gói, DNS). Có thể thu hẹp theo chính sách doanh nghiệp.
 
 ### 4.3 Security Group gắn máy chủ Database
 
 **Quy tắc Inbound (ingress):**
 
-| Loại | Cổng / Giao thức | Nguồn (Source) | Ghi chú |
-|------|-------------------|----------------|---------|
-| SSH | TCP `22` | IP quản trị / bastion | Giống nguyên tắc máy App. |
-| MySQL | TCP `3306` | **Chỉ** Security Group của máy Application **hoặc** Private IP của máy App (`/32`) | **Không** mở `3306` ra `0.0.0.0/0`. Cho phép đúng nguồn từ máy chạy backend. |
+| Loại  | Cổng / Giao thức | Nguồn (Source)                                                                     | Ghi chú                                                                      |
+| ----- | ---------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| SSH   | TCP `22`         | IP quản trị / bastion                                                              | Giống nguyên tắc máy App.                                                    |
+| MySQL | TCP `3306`       | **Chỉ** Security Group của máy Application **hoặc** Private IP của máy App (`/32`) | **Không** mở `3306` ra `0.0.0.0/0`. Cho phép đúng nguồn từ máy chạy backend. |
 
 **Quy tắc Outbound (egress):** mặc định cho phép (hoặc chỉ mở những đích cần cho backup/monitoring nếu tách rule).
 
@@ -121,11 +122,11 @@ Nguyên nhân thường gặp: gói Docker từ distro kèm **Buildx cũ** (ví 
 
 ### 5.1 Yêu cầu phiên bản tối thiểu (nên kiểm tra trước khi triển khai)
 
-| Thành phần | Ghi chú |
-|------------|---------|
-| Docker Engine | Khuyến nghị **23.x trở lên** (kiểm tra: `docker --version`). |
+| Thành phần              | Ghi chú                                                      |
+| ----------------------- | ------------------------------------------------------------ |
+| Docker Engine           | Khuyến nghị **23.x trở lên** (kiểm tra: `docker --version`). |
 | Docker Compose (plugin) | Khuyến nghị **v2.20+** (kiểm tra: `docker compose version`). |
-| **Docker Buildx** | **Bắt buộc ≥ 0.17.0** (kiểm tra: `docker buildx version`). |
+| **Docker Buildx**       | **Bắt buộc ≥ 0.17.0** (kiểm tra: `docker buildx version`).   |
 
 ### 5.2 Cài Docker (ví dụ Amazon Linux 2023)
 
@@ -248,22 +249,24 @@ cp .env.example .env
 
 Cập nhật trong `.env` — bảng chú thích các thông số (theo `app_service/.env.example`):
 
-| Biến | Ý nghĩa / Ghi chú |
-|------|-------------------|
-| `APP_NAME` | Tên hiển thị/log cho backend (chuỗi mô tả ứng dụng API). Không ảnh hưởng URL; có thể giữ mặc định hoặc đổi cho đúng tên sản phẩm. |
-| `ENVIRONMENT` | Nhãn môi trường chạy API (ví dụ `prod`, `staging`, `dev`). Dùng để phân biệt cấu hình và log; nên khớp thực tế triển khai. |
-| `CORS_ORIGINS` | **Origin** được phép trình duyệt gọi API (scheme + host + port). Phải trùng URL mà user mở app (ví dụ `http://47.129.182.197` hoặc `https://ten-mien.com`). `http://localhost` chỉ đúng khi test từ máy local; trên server production cần đổi sang URL public hoặc domain thật. Nhiều origin: cách nhau bằng dấu phẩy (theo quy ước backend). |
-| `DB_HOST` | Địa chỉ máy chủ MySQL. **`127.0.0.1` chỉ dùng khi MySQL chạy trên cùng máy với App.** Nếu DB là **máy riêng** (EC2 khác): dùng **Private IP** (cùng VPC, an toàn hơn) hoặc **Public IP**/DNS của server DB — và mở security group/firewall cho cổng `DB_PORT` từ IP máy App. |
-| `DB_PORT` | Cổng MySQL (thường `3306`). Khớp với cổng MySQL thực tế trên server DB và với `MYSQL_PORT` ở `database_service` nếu map port ra host. |
-| `DB_USER` | User MySQL backend dùng để đăng nhập (thường trùng `MYSQL_USER` trên DB server; tránh dùng `root` trên production nếu có thể). |
-| `DB_PASSWORD` | Mật khẩu của `DB_USER`, trùng khớp cấu hình trên server database. |
-| `DB_NAME` | Tên schema/database (ví dụ `iot`), khớp `MYSQL_DATABASE` ở `database_service`. |
-| `API_URL` | URL gốc mà **client/frontend** hoặc tài liệu tham chiếu dùng để gọi API (ví dụ `http://47.129.182.197:8000` hoặc domain qua reverse proxy). `http://localhost:8000` chỉ đúng khi dev local; trên EC2 nên dùng **public IP + cổng backend** hoặc URL HTTPS sau khi có domain. |
-| `FRONTEND_HTTP_PORT` | Cổng trên **máy chủ App** mà container Nginx (SPA) publish ra ngoài (mặc định `80`). User truy cập web qua `http://<public-ip>:<port>` nếu không dùng 443. |
-| `JWT_SECRET` | Chuỗi bí mật ký JWT đăng nhập. **Bắt buộc đổi** sang chuỗi dài, ngẫu nhiên, không commit lên Git; nếu lộ, token có thể bị giả mạo. |
-| `JWT_EXPIRE_MINUTES` | Thời gian hiệu lực token (phút). Ví dụ `10080` ≈ 7 ngày. Giảm nếu cần bảo mật cao hơn; tăng nếu chấp nhận phiên dài. |
+| Biến                 | Ý nghĩa / Ghi chú                                                                                                                                                                                                                                                                                                                             |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_NAME`           | Tên hiển thị/log cho backend (chuỗi mô tả ứng dụng API). Không ảnh hưởng URL; có thể giữ mặc định hoặc đổi cho đúng tên sản phẩm.                                                                                                                                                                                                             |
+| `ENVIRONMENT`        | Nhãn môi trường chạy API (ví dụ `prod`, `staging`, `dev`). Dùng để phân biệt cấu hình và log; nên khớp thực tế triển khai.                                                                                                                                                                                                                    |
+| `CORS_ORIGINS`       | **Origin** được phép trình duyệt gọi API (scheme + host + port). Phải trùng URL mà user mở app (ví dụ `http://47.129.182.197` hoặc `https://ten-mien.com`). `http://localhost` chỉ đúng khi test từ máy local; trên server production cần đổi sang URL public hoặc domain thật. Nhiều origin: cách nhau bằng dấu phẩy (theo quy ước backend). |
+| `DB_HOST`            | Địa chỉ máy chủ MySQL. **`127.0.0.1` chỉ dùng khi MySQL chạy trên cùng máy với App.** Nếu DB là **máy riêng** (EC2 khác): dùng **Private IP** (cùng VPC, an toàn hơn) hoặc **Public IP**/DNS của server DB — và mở security group/firewall cho cổng `DB_PORT` từ IP máy App.                                                                  |
+| `DB_PORT`            | Cổng MySQL (thường `3306`). Khớp với cổng MySQL thực tế trên server DB và với `MYSQL_PORT` ở `database_service` nếu map port ra host.                                                                                                                                                                                                         |
+| `DB_USER`            | User MySQL backend dùng để đăng nhập (thường trùng `MYSQL_USER` trên DB server; tránh dùng `root` trên production nếu có thể).                                                                                                                                                                                                                |
+| `DB_PASSWORD`        | Mật khẩu của `DB_USER`, trùng khớp cấu hình trên server database.                                                                                                                                                                                                                                                                             |
+| `DB_NAME`            | Tên schema/database (ví dụ `iot`), khớp `MYSQL_DATABASE` ở `database_service`.                                                                                                                                                                                                                                                                |
+| `API_URL`            | URL gốc mà **client/frontend** hoặc tài liệu tham chiếu dùng để gọi API (ví dụ `http://47.129.182.197:8000` hoặc domain qua reverse proxy). `http://localhost:8000` chỉ đúng khi dev local; trên EC2 nên dùng **public IP + cổng backend** hoặc URL HTTPS sau khi có domain.                                                                  |
+| `FRONTEND_HTTP_PORT` | Cổng trên **máy chủ App** mà container Nginx (SPA) publish ra ngoài (mặc định `80`). User truy cập web qua `http://<public-ip>:<port>` nếu không dùng 443.                                                                                                                                                                                    |
+| `JWT_SECRET`         | Chuỗi bí mật ký JWT đăng nhập. **Bắt buộc đổi** sang chuỗi dài, ngẫu nhiên, không commit lên Git; nếu lộ, token có thể bị giả mạo.                                                                                                                                                                                                            |
+| `JWT_EXPIRE_MINUTES` | Thời gian hiệu lực token (phút). Ví dụ `10080` ≈ 7 ngày. Giảm nếu cần bảo mật cao hơn; tăng nếu chấp nhận phiên dài.                                                                                                                                                                                                                          |
 
 **Lưu ý nhanh:** `DB_HOST=127.0.0.1` trên app server chỉ hợp lệ khi container DB hoặc MySQL cài **cùng host** với backend. Tách DB sang EC2 khác thì phải điền IP/hostname của **máy database**.
+
+Với kiến trúc tách stack, `INFLUX_URL` nên trỏ tới service name `influxdb` trên mạng dùng chung `iot-net` (mặc định `http://influxdb:8086`).
 
 Khởi chạy:
 
@@ -274,11 +277,40 @@ docker compose logs -f backend
 docker compose logs -f frontend
 ```
 
-## 8. Giai đoạn B — Server đang hoạt động: cập nhật mã từ Git
+## 8. Triển khai `influxdb_service`
+
+```bash
+cd ~/influxdb_service
+cp .env.example .env
+```
+
+Cập nhật tối thiểu trong `.env`:
+
+- `INFLUX_INIT_USERNAME`
+- `INFLUX_INIT_PASSWORD`
+- `INFLUX_ORG`
+- `INFLUX_BUCKET`
+- `INFLUX_TOKEN`
+
+Khởi chạy:
+
+```bash
+docker compose up -d
+docker compose ps
+docker compose logs -f influxdb
+```
+
+Kiểm tra nhanh API InfluxDB:
+
+```bash
+curl -i http://127.0.0.1:8086/health
+```
+
+## 9. Giai đoạn B — Server đang hoạt động: cập nhật mã từ Git
 
 Khi có bản cập nhật mới trên GitHub, trên **từng máy chủ** tương ứng:
 
-### 8.1 Máy chủ Database — kéo mã về (`git pull`)
+### 9.1 Máy chủ Database — kéo mã về (`git pull`)
 
 ```bash
 cd ~/database_service
@@ -294,12 +326,12 @@ docker compose up -d
 docker compose ps
 ```
 
-### 8.2 Cập nhật schema MySQL sau khi có file `sql/` mới trên Git
+### 9.2 Cập nhật schema MySQL sau khi có file `sql/` mới trên Git
 
 **Quan trọng:** `git pull` chỉ cập nhật file trên đĩa máy chủ. MySQL trong Docker **không tự** chạy lại các script trong `sql/` khi volume dữ liệu (`mysql_data`) **đã tồn tại** từ trước.
 
 - **Máy DB mới, volume trống (lần đầu `docker compose up`):** entrypoint MySQL chạy một lần các file trong `/docker-entrypoint-initdb.d` (thư mục `sql/` được mount vào đó) → bảng/schema theo repo được tạo **tự động**.
-- **Máy DB đã chạy lâu, đã có dữ liệu:** kéo code mới có thêm/sửa `schema.sql` hoặc file migration (`004_*.sql`, `005_*.sql`, …) → bạn phải **áp dụng thủ công** lên database đang chạy (hoặc dựa vào migration trong backend `app_service` khi process backend **được khởi động lại** và kết nối được MySQL — xem mục 8.4).
+- **Máy DB đã chạy lâu, đã có dữ liệu:** kéo code mới có thêm/sửa `schema.sql` hoặc file migration (`004_*.sql`, `005_*.sql`, …) → bạn phải **áp dụng thủ công** lên database đang chạy (hoặc dựa vào migration trong backend `app_service` khi process backend **được khởi động lại** và kết nối được MySQL — xem mục 9.4).
 
 Sau khi `git pull`, xem trong `sql/` có file migration mới nào (đọc comment đầu file để biết thứ tự và điều kiện). Ví dụ áp dụng migration (điều chỉnh user/mật khẩu/database cho đúng `.env`):
 
@@ -311,6 +343,8 @@ set -a && source .env && set +a
 docker compose exec -T db mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" < sql/004_device_ui_columns.sql
 # Nếu tài liệu migration yêu cầu chạy thêm (ví dụ gỡ cột cũ):
 # docker compose exec -T db mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" < sql/005_drop_last_reading.sql
+# Migration topic MQTT theo từng thiết bị:
+# docker compose exec -T db mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" < sql/006_add_device_topic.sql
 ```
 
 Kiểm tra nhanh:
@@ -321,7 +355,7 @@ docker compose exec db mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABAS
 
 **Lưu ý:** `docker compose up -d` **không** thay thế bước trên — nó chỉ đảm bảo container MySQL chạy; không import lại toàn bộ `sql/` vào DB cũ.
 
-### 8.3 Máy chủ App — kéo mã và build frontend
+### 9.3 Máy chủ App — kéo mã và build frontend
 
 ```bash
 cd ~/app_service
@@ -334,7 +368,7 @@ docker compose ps
 
 Trong `docker-compose.yml` mặc định của `app_service`, **chỉ service `frontend`** có chỉ thị `build:` (Dockerfile). Lệnh `docker compose up -d --build` vì vậy **build lại image SPA/Nginx** khi `Dockerfile`, `package.json` hoặc mã React thay đổi. Service **`backend`** dùng image `python:3.12-slim` và **mount** thư mục `./backend` vào container — **không** có bước build image cho từng lần sửa file Python.
 
-### 8.4 Bắt buộc: reset / khởi động lại backend sau khi cập nhật mã Python
+### 9.4 Bắt buộc: reset / khởi động lại backend sau khi cập nhật mã Python
 
 **Vì sao cần:** Thư mục `backend/` trên máy chủ đã được `git pull` mới, nhưng process **uvicorn** trong container (thường **không** bật `--reload` trên production) **không tự nạp lại** module đã import. Nếu chỉ chạy `docker compose up -d --build`, Compose có thể **không** tạo lại container `backend` (image và cấu hình service không đổi) → backend vẫn hiển thị trạng thái **Up nhiều giờ**, vẫn chạy **mã cũ trong bộ nhớ**, dù file trên đĩa đã mới. Điều này dễ gây lỗi “đã pull code nhưng API/ghi DB vẫn sai”.
 
@@ -368,18 +402,18 @@ Bạn nên thấy backend **vừa khởi động lại** (thời gian “Up” n
 
 **Gợi ý:** Sau khi backend restart, migration trong code (ví dụ `app/core/db_migrate.py`) chạy lại **mỗi khi** process khởi động — hữu ích khi `DB_HOST` trỏ đúng máy database; vẫn nên kiểm tra schema bằng `SHOW COLUMNS` khi cần.
 
-### 8.5 Thứ tự khuyến nghị khi có bản cập nhật đồng thời
+### 9.5 Thứ tự khuyến nghị khi có bản cập nhật đồng thời
 
-1. Trên **máy Database:** `git pull` trong `database_service`, rồi **chạy các file migration SQL** cần thiết (mục 8.2) nếu volume MySQL đã có dữ liệu.
-2. Trên **máy App:** `git pull` trong `app_service`, `docker compose up -d --build`, sau đó **`docker compose restart backend`** hoặc **`--force-recreate backend`** (mục 8.4), rồi xem log backend (`docker compose logs backend --tail 100`) để xác nhận kết nối DB và không lỗi migration.
+1. Trên **máy Database:** `git pull` trong `database_service`, rồi **chạy các file migration SQL** cần thiết (mục 9.2) nếu volume MySQL đã có dữ liệu.
+2. Trên **máy App:** `git pull` trong `app_service`, `docker compose up -d --build`, sau đó **`docker compose restart backend`** hoặc **`--force-recreate backend`** (mục 9.4), rồi xem log backend (`docker compose logs backend --tail 100`) để xác nhận kết nối DB và không lỗi migration.
 
-### 8.6 Lưu ý
+### 9.6 Lưu ý
 
 - Không ghi đè file `.env` khi merge/pull; nên backup `.env` trước khi `git pull` nếu repo có thay đổi mẫu env.
 - Nếu nhánh mặc định trên GitHub không phải `main`, thay `main` bằng tên nhánh đúng (ví dụ `master`).
 - Sao lưu (`mysqldump`) trước khi chạy migration trên production nếu thay đổi schema có rủi ro.
 
-### 8.7 Checklist deploy nhanh trên EC2 (chạy một lần)
+### 9.7 Checklist deploy nhanh trên EC2 (chạy một lần)
 
 Mục tiêu: cập nhật `app_service`, restart backend để nạp mã Python mới, và verify nhanh các endpoint quan trọng.
 
@@ -432,30 +466,31 @@ curl -i -X DELETE "http://127.0.0.1:8000/api/devices/<DEVICE_ID_TEST>" \
 ```
 
 Kỳ vọng:
+
 - `/api/health` trả `200`.
 - `/api/users` trả JSON có `authorized_devices` trên từng user (hoặc frontend đã fallback nếu backend cũ).
 - `DELETE /api/devices/{id}` không trả `405`; kết quả hợp lệ thường là `204` (xóa thành công), `404` (không tồn tại), hoặc `403` (không đủ quyền).
 
-## 9. Kiểm tra sau triển khai
+## 10. Kiểm tra sau triển khai
 
 - API health: `http://<server-ip>:8000/api/health` (nếu backend được publish port)
 - Frontend: `http://<server-ip>:<FRONTEND_HTTP_PORT>`
 - DB kết nối nội bộ: kiểm tra qua log backend và health endpoint DB.
 
-## 10. HTTPS (khuyến nghị)
+## 11. HTTPS (khuyến nghị)
 
 Hướng dẫn từng bước (DNS, Security Group, Certbot, `docker-compose.override.yml`, CORS, gia hạn chứng chỉ): **`docs/deployment/https-setup.md`**.
 
 Tóm tắt: dùng Let’s Encrypt (Certbot) và file mẫu `app_service/nginx/prod.https.conf`. Có thể tham khảo thêm ghi chú vận hành ở `deloy.md` (nếu có trong repo).
 
-## 11. Lưu ý vận hành
+## 12. Lưu ý vận hành
 
 - Không commit file `.env`.
-- Dùng mật khẩu mạnh cho MySQL và JWT secret.
-- Bật backup định kỳ cho dữ liệu DB.
-- Giám sát `docker compose logs` và tài nguyên hệ thống khi build image frontend; sau khi sửa mã Python trong `backend/`, nhớ **restart backend** (mục 8.4).
+- Dùng mật khẩu mạnh cho MySQL, JWT secret và Influx token.
+- Bật backup định kỳ cho dữ liệu DB và InfluxDB.
+- Giám sát `docker compose logs` và tài nguyên hệ thống khi build image frontend; sau khi sửa mã Python trong `backend/`, nhớ **restart backend** (mục 9.4).
 
-## 12. Tài liệu bổ sung
+## 13. Tài liệu bổ sung
 
 - Thao tác Docker chi tiết trên máy chủ Linux (build, up/down, log, exec, prune): `docs/deployment/docker-linux-tutorial.md`.
 - Thao tác MySQL trên máy chủ (Docker `database_service`, root/user, truy vấn, backup): `docs/deployment/mysql-linux-operations.md`.
