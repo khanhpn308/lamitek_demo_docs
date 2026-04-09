@@ -247,6 +247,106 @@ cd ~/app_service
 cp .env.example .env
 ```
 
+**Lưu ý:** Stack `app_service` đã bao gồm **Mosquitto broker** — cấu hình nằm ở `app_service/mosquitto.conf`. Backend sẽ chạy `depends_on` Mosquitto với điều kiện `service_healthy`.
+
+### 7.1 Giải thích log Mosquitto khi khởi chạy
+
+Khi chạy `docker compose up -d --build`, bạn sẽ thấy log từ Mosquitto có nhiều dòng like:
+
+```
+1775703804: New connection from 127.0.0.1:54722 on port 1883.
+1775703804: New client connected from 127.0.0.1:54722 as auto-... (p2, c1, k60).
+1775703805: Client auto-... disconnected.
+```
+
+Đây là **hành vi bình thường**: Docker healthcheck kết nối tới broker mỗi 10 giây để kiểm tra sức khỏe (`netstat -tln | grep -q 1883`). Không phải lỗi.
+
+### 7.2 Cấu hình Mosquitto (mosquitto.conf)
+
+Cấu hình Mosquitto nằm ở `app_service/mosquitto.conf`. Nội dung mặc định:
+
+```conf
+# MQTT qua TCP (Cho ESP32, FastAPI)
+listener 1883 0.0.0.0
+allow_anonymous true
+
+# MQTT qua WebSockets (Bắt buộc cho React Frontend)
+listener 9001 0.0.0.0
+protocol websockets
+```
+
+**Giải thích:**
+
+- **`listener 1883 0.0.0.0`**: Broker lắng nghe MQTT TCP trên cổng 1883 (chuẩn MQTT), mở cho toàn bộ IP (`0.0.0.0`).
+- **`allow_anonymous true`**: cho phép kết nối không xác thực. **Trên production**, nên đổi thành `false` và cấu hình username/password.
+- **`listener 9001 ... websockets`**: Cổng 9001 cho WebSocket (React frontend dùng khi kết nối MQTT qua JS).
+
+**Nếu muốn bật xác thực (khuyến nghị production):**
+
+Thêm vào file `app_service/mosquitto.conf`:
+
+```conf
+allow_anonymous false
+password_file /mosquitto/config/mosquitto.passwd
+```
+
+Tạo file `mosquitto.passwd` trên host bằng lệnh:
+
+```bash
+# Tạo file với user "iot_user"
+docker run --rm -v $(pwd)/app_service:/mosquitto/config eclipse-mosquitto \
+  mosquitto_passwd -c /mosquitto/config/mosquitto.passwd iot_user
+# (Nhập mật khẩu khi được hỏi)
+```
+
+Gắn volume vào `docker-compose.yml`:
+
+```yaml
+mosquitto:
+  ...
+  volumes:
+    - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    - ./mosquitto.passwd:/mosquitto/config/mosquitto.passwd:ro
+    ...
+```
+
+Cập nhật backend `.env`:
+
+```dotenv
+MQTT_USERNAME=iot_user
+MQTT_PASSWORD=<password-được-set>
+```
+
+**Cấu hình nghe trên IP cụ thể (thay vì 0.0.0.0):**
+
+Nếu muốn Mosquitto chỉ nghe trên interface riêng:
+
+```conf
+listener 1883 10.0.1.5
+allow_anonymous true
+```
+
+Cập nhật backend `.env`:
+
+```dotenv
+MQTT_HOST=10.0.1.5
+```
+
+**Thêm logging chi tiết:**
+
+```conf
+log_dest file /mosquitto/log/mosquitto.log
+log_dest stdout
+log_timestamp true
+log_type all
+```
+
+Kiểm tra log:
+
+```bash
+docker compose logs -f mosquitto
+```
+
 Cập nhật trong `.env` — bảng chú thích các thông số (theo `app_service/.env.example`):
 
 | Biến                 | Ý nghĩa / Ghi chú                                                                                                                                                                                                                                                                                                                             |
