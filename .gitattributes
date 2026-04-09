@@ -1,0 +1,10 @@
+# DLE = Docs Line Endings
+# Cong dung: chuan hoa line ending trong repo docs de tranh canh bao LF/CRLF va diff rac.
+* text=auto
+
+# Markdown and docs text files use LF
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.txt text eol=lf

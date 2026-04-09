@@ -1,5 +1,47 @@
 # Changelog (docs)
 
+## 2026-04-10
+
+- **Backend**
+  - Cập nhật `app_service/backend/app/core/payload_decoder.py`:
+    - Bổ sung nhánh decode Protobuf cho schema `SimpleSensor` mới của node ESP32:
+      - `string device_id = 1`
+      - `float temperature = 2`
+      - `bool is_active = 3`
+      - `uint32 sequence = 4`
+      - `uint64 timestamp_ms = 5`
+    - Cập nhật thứ tự fallback decode: JSON UTF-8 -> Protobuf `SimpleSensor` -> template binary NanoPB -> `raw_hex` khi không parse được.
+    - Bổ sung map trường chuẩn đầu ra gồm `is_active`, `sequence`, `timestamp_ms`.
+    - Chuẩn hóa `ts` ưu tiên từ `timestamp_ms` (nếu có) để đồng bộ timeline dữ liệu giữa publisher và backend.
+  - Cập nhật `app_service/backend/app/core/payload_decoder.py`:
+    - Bổ sung chuẩn hóa timestamp epoch với guard hợp lệ (tránh ghi điểm về năm `1970` khi node gửi uptime),
+    - Parse chuỗi ISO không timezone theo chuẩn UTC (không cộng/bù giờ theo timezone máy chủ, ví dụ `+7`),
+    - Chuẩn hóa alias payload cho template mới (`device_id`/`deviceId`/`id`, `sensor_type`/`sensorType`/`type`, `temperature`/`temp`/`temp_c`, ...),
+    - Hỗ trợ map payload dạng generic `value`/`reading`/`measurement` theo `sensor_type`.
+  - Cập nhật `app_service/backend/app/core/influx_service.py`:
+    - Chuẩn hóa ghi field metric theo alias (`temperature`, `vibration`, `voltage`, `current`),
+    - Bổ sung guard timestamp khi ghi point vào InfluxDB để fallback về thời gian hiện tại nếu timestamp không hợp lệ.
+  - Cập nhật `app_service/backend/app/api/mqtt_routes.py`:
+    - Thêm endpoint debug `GET /api/mqtt/influx/status` để kiểm tra trạng thái kết nối Influx (`enabled`, `started`, `bucket`, `measurement`, `last_error`).
+- **Frontend**
+  - Cập nhật `app_service/src/pages/GlobalDashboard.jsx`:
+    - Chuẩn hóa `device_type` có dấu tiếng Việt bằng hàm normalize bỏ dấu,
+    - Cho phép suy luận type từ payload realtime (`sensor_type`) và từ history,
+    - Bổ sung hiển thị thiết bị phát hiện từ dữ liệu history (trường hợp `device_id` là chuỗi từ node ESP32).
+  - Cập nhật `app_service/src/pages/DeviceDetail.jsx`:
+    - Fallback truy vấn history theo `topic` khi `device_id` DB không khớp `device_id` payload,
+    - Fallback realtime qua `ws/global` + filter theo `topic`/`device_id` để không mất dữ liệu chart khi định danh thiết bị lệch giữa DB và node,
+    - Chuẩn hóa timestamp event realtime về milliseconds trước khi render biểu đồ.
+- **Docs**
+  - Thêm `.gitattributes` trong repo `docs` để chuẩn hóa line ending (DLE = Docs Line Endings), tránh cảnh báo `LF will be replaced by CRLF` khi `git add` trên Windows.
+  - Cập nhật `docs/changelogs.md` để phản ánh luồng fix Influx + dashboard mapping cho payload template mới từ ESP32.
+  - Thêm `.gitattributes` tại root repo để chuẩn hóa line ending (GLE = Git Line Endings), giảm cảnh báo `LF will be replaced by CRLF` và tránh diff không cần thiết giữa Windows/Linux.
+  - Cập nhật `docs/deployment/docker-linux-deployment.md`: bổ sung mục `9.8 Restart container khi có cập nhật` (RCU), kèm quy trình restart/recreate cho `app_service`, `database_service`, `influxdb_service`.
+  - Cập nhật `deloy.md`: bổ sung mục `7) Restart container khi có cập nhật` (RCU) cho cả ba stack dịch vụ.
+  - Thêm `docs/bugs/2026-04-10-mosquitto-esp32-intermittent-disconnect-clientid.md`: ghi nhận sự cố MQTT kết nối dao động do trùng Client ID ESP32 và quy trình xử lý từng bước.
+  - Thêm `docs/bugs/2026-04-09-mysql-auth-docker-env-override.md`: ghi nhận sự cố xác thực MySQL trong Docker do biến môi trường CMD ghi đè `.env`, lỗi `1045` cho `root` và `iot_user`, cùng quy trình xử lý step by step (chuẩn hóa `--env-file`, đồng bộ password/quyền user ứng dụng, và kiểm tra lệch schema `iot`/`demo_iot`).
+  - Cập nhật nội dung `docs/bugs/2026-04-10-mosquitto-esp32-intermittent-disconnect-clientid.md`: làm rõ triệu chứng ESP32 vẫn publish trong lúc broker đóng phiên cũ và reconnect.
+
 ## 2026-04-08
 
 - **Docker**

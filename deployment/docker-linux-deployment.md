@@ -571,6 +571,83 @@ Kỳ vọng:
 - `/api/users` trả JSON có `authorized_devices` trên từng user (hoặc frontend đã fallback nếu backend cũ).
 - `DELETE /api/devices/{id}` không trả `405`; kết quả hợp lệ thường là `204` (xóa thành công), `404` (không tồn tại), hoặc `403` (không đủ quyền).
 
+### 9.8 Restart container khi có cập nhật
+
+**Viết tắt:**
+
+- **RCU** = **Restart Containers on Update**.
+
+**Công dụng:**
+
+- Đảm bảo process trong container nạp mã/cấu hình mới nhất sau `git pull` hoặc chỉnh `.env`.
+- Tránh tình trạng container vẫn `Up` nhưng đang chạy code cũ trong bộ nhớ.
+
+**Nguyên tắc khuyến nghị:**
+
+- Chỉ restart service bị ảnh hưởng để giảm downtime.
+- Khi đổi biến môi trường, ưu tiên `--force-recreate` thay vì chỉ `restart`.
+
+#### 9.8.1 `app_service`
+
+```bash
+cd ~/app_service
+
+# Cập nhật mã
+git fetch origin
+git pull origin main
+
+# Build lại frontend nếu có thay đổi FE/Dockerfile
+docker compose up -d --build frontend
+
+# Backend: nạp mã Python mới
+docker compose restart backend
+
+# Nếu có đổi .env hoặc compose cho backend
+docker compose up -d --force-recreate backend
+
+docker compose ps
+docker compose logs backend --tail 80
+```
+
+#### 9.8.2 `database_service`
+
+```bash
+cd ~/database_service
+git fetch origin
+git pull origin main
+
+# Nếu chỉ cập nhật script vận hành: đảm bảo service chạy
+docker compose up -d
+
+# Nếu đổi biến môi trường/cấu hình container DB
+docker compose up -d --force-recreate db
+
+docker compose ps
+docker compose logs db --tail 80
+```
+
+#### 9.8.3 `influxdb_service`
+
+```bash
+cd ~/influxdb_service
+git fetch origin
+git pull origin main
+
+# Đảm bảo service chạy
+docker compose up -d
+
+# Nếu đổi .env hoặc compose cho InfluxDB
+docker compose up -d --force-recreate influxdb
+
+docker compose ps
+docker compose logs influxdb --tail 80
+```
+
+**Lưu ý quan trọng:**
+
+- Không dùng `docker compose down -v` trên production trừ khi chủ động xoá dữ liệu volume.
+- Với MySQL/InfluxDB, thay đổi file SQL hoặc bootstrap env không tự áp lại vào volume cũ.
+
 ## 10. Kiểm tra sau triển khai
 
 - API health: `http://<server-ip>:8000/api/health` (nếu backend được publish port)
