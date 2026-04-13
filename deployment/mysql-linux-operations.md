@@ -1,6 +1,6 @@
 # Thao Tác MySQL Trên Máy Chủ Linux (`database_service`)
 
-- Mã tài liệu: DEPLOY-IOT-003
+- Mã tài liệu: DEPLOY-lamitek-003
 - Phiên bản: 1.0.0
 - Ngày cập nhật: 2026-04-05
 

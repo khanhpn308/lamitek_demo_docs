@@ -1,6 +1,6 @@
 # Hướng Dẫn Triển Khai Docker Trên Linux (App + Database + InfluxDB)
 
-- Mã tài liệu: DEPLOY-IOT-001
+- Mã tài liệu: DEPLOY-lamitek-001
 - Phiên bản: 1.6.7
 - Ngày cập nhật: 2026-04-08
 

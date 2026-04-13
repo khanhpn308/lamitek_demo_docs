@@ -1,5 +1,14 @@
 # Changelog (docs)
 
+## 2026-04-13
+
+- **Docs**
+  - Thêm `docs/overvew.md`: tài liệu tổng quan chuẩn Markdown cho phạm vi `app_service`, gồm:
+    - kiến trúc tổng thể FE/BE/MQTT/Influx/Nginx,
+    - cây thư mục chính,
+    - chức năng từng thư mục,
+    - chức năng từng file trọng yếu (root config, backend modules, frontend pages/components/lib, deployment).
+
 ## 2026-04-10
 
 - **Backend**

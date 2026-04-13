@@ -1,6 +1,6 @@
 # Hướng Dẫn Thao Tác Docker Trên Máy Chủ Linux
 
-- Mã tài liệu: DEPLOY-IOT-004
+- Mã tài liệu: DEPLOY-lamitek-004
 - Phiên bản: 1.1.0
 - Ngày cập nhật: 2026-04-05
 
