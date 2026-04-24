@@ -32,17 +32,20 @@ app_service/backend/app/
 ## 2. Quy định lớp (layer)
 
 ### 2.1 Router layer (`api`)
+
 - Nhận request, validate schema đầu vào.
 - Gọi service nghiệp vụ.
 - Trả response model.
 - Không chứa truy vấn DB phức tạp kéo dài.
 
 ### 2.2 Service layer (`services`) - áp dụng khi tái cấu trúc
+
 - Chứa logic nghiệp vụ và rule.
 - Không phụ thuộc FastAPI `Request` hoặc `Response`.
 - Điều phối repository và transaction.
 
 ### 2.3 Repository layer (`repositories`) - áp dụng khi tái cấu trúc
+
 - Chứa truy vấn SQLAlchemy.
 - Đóng gói truy xuất dữ liệu theo domain.
 - Không chứa nghiệp vụ vượt khỏi phạm vi dữ liệu.
@@ -97,3 +100,5 @@ app_service/backend/app/
   - unit test cho service/repository.
   - integration test cho endpoint auth, users, devices.
 - Mọi bug nghiêm trọng phải có test hồi quy.
+- Với luồng realtime/telemetry, bắt buộc có test profiling độ trễ theo từng chặng (Node -> Gateway -> Server) và lưu được các trường timestamp/delay để phân tích hậu kiểm.
+- Chuẩn báo cáo latency regression nên bao gồm ít nhất `mean`, `p95`, `p99`, `max` và tỉ lệ mẫu lỗi, tham chiếu quy trình tại `docs/testing/testcases.md` (Test Case 02).

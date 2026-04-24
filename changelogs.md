@@ -1,5 +1,18 @@
 # Changelog (docs)
 
+## 2026-04-24
+
+- **Docs**
+  - Cập nhật `docs/testing/testcases.md`:
+    - Mở rộng chi tiết **Test Case 02 (Latency Profiling)** từ đo đơn điểm thành đo theo từng chặng `Node -> Gateway -> Server -> Frontend`.
+    - Bổ sung điều kiện tiên quyết (NTP sync, payload timestamp bắt buộc), công thức đo chi tiết, và bộ chỉ số thống kê (`mean`, `median`, `p95`, `p99`, `max`, `std`).
+    - Bổ sung quy trình thu mẫu chuẩn (>= 1000 mẫu, bỏ warm-up), đo theo 3 bối cảnh tải (Baseline/Normal/Stress), và tiêu chí chấp nhận cụ thể cho `delay_node_to_server_ms`.
+    - Bổ sung yêu cầu đầu ra kiểm thử (artifact CSV/JSON + báo cáo thống kê).
+  - Cập nhật `docs/adr/SRS.md`:
+    - Làm rõ NFR độ trễ bằng ngưỡng đo định lượng (`mean` và `p95`) và liên kết phương pháp đo với `docs/testing/testcases.md` (Test Case 02).
+  - Cập nhật `docs/guidelines/backend-guidelines.md`:
+    - Bổ sung guideline kiểm thử backend cho luồng latency profiling: bắt buộc lưu timestamp/delay theo từng chặng và chuẩn hóa artifact phục vụ phân tích hồi quy hiệu năng.
+
 ## 2026-04-13
 
 - **Docs**
