@@ -1,5 +1,49 @@
 # Changelog (docs)
 
+## 2026-05-07
+
+- **Backend - Refactoring**
+  - Cấu trúc WebSocket routes: chuyển 2 endpoint `/ws/global` và `/ws/devices/{device_id}` từ inline `@app.websocket` trong `app/main.py` sang `app/api/websocket_routes.py` để nhất quán với chuẩn architecture (tất cả routes trong `app/api/**_routes.py`).
+  - Cập nhật `app/api/websocket_routes.py`:
+    - Thêm endpoint `/ws/global` (broadcast realtime data tới tất cả GlobalDashboard clients).
+    - Thêm endpoint `/ws/devices/{device_id}` (broadcast realtime data tới dashboard per-device).
+    - Cập nhật endpoint `/ws/esp32/{device_id}` (bi-directional device uplink):
+      - Hỗ trợ text JSON, binary frames, ping/pong.
+      - Thêm extensive docstring giải thích flow, payload schema, error handling.
+      - TODO comment: future downlink support qua `hub.send_to_esp32()` từ REST API.
+      - TODO comment: thêm device authentication (API key, JWT token, device_secret).
+    - Cập nhật docstring module với data flow diagram: MQTT → decoder → InfluxDB/RealtimeHub/TestService.
+    - Thêm hàm `_get_realtime_hub()` helper lấy shared RealtimeHub từ app state.
+  - Cập nhật `app/main.py`:
+    - Xóa 2 endpoint `/ws/global` và `/ws/devices/{device_id}` (chuyển sang websocket_routes.py).
+    - Thêm inline comment rõ ràng giải thích WebSocket routes được define trong websocket_routes.py.
+  - Cập nhật `docs/api/api-documentation.md`:
+    - Thêm section mới "## 4. WebSocket (Realtime Data Streaming)" với chi tiết:
+      - WS `/ws/global`: mô tả, cách kết nối, payload example, ghi chú.
+      - WS `/ws/devices/{device_id}`: mô tả, khi nào dùng vs `/ws/global`.
+      - WS `/ws/esp32/{device_id}`: uplink/downlink mô tả, binary support, Arduino/ESP32 code example.
+
+- **Backend - Test mode (WebSocket + đo độ trễ)**
+  - Bổ sung luồng ghi log uplink qua WebSocket để phục vụ đo độ trễ end-to-end (tính `delay_ms` dựa trên `timestamp_ms`/`ts` và `server_receive_ms`).
+  - Cập nhật API test:
+    - `GET /api/test/config` (admin): xem cấu hình test mode.
+    - `PUT /api/test/config` (admin): cập nhật cấu hình, hỗ trợ `protocol: mqtt | websocket` và `device_id`.
+    - `GET /api/test/logs` (admin): bổ sung query params `protocol` và `device_id` để auto-filter log theo cấu hình đang test.
+
+- **Backend - WebSocket compatibility & robustness**
+  - Mở đồng thời 2 base path cho WebSocket để tương thích nhiều client:
+    - Có prefix `/api`: `/api/ws/global`, `/api/ws/devices/{device_id}`, `/api/ws/esp32/{device_id}`
+    - Không prefix `/api`: `/ws/global`, `/ws/devices/{device_id}`, `/ws/esp32/{device_id}`
+  - Tăng độ bền handler khi client disconnect (handle `websocket.disconnect` frame) và log rõ connect attempt để debug mạng.
+  - Hỗ trợ uplink binary protobuf (GPS `coordinates_data`) trên `/ws/devices/{device_id}` và `/ws/esp32/{device_id}`.
+
+- **Nginx - WebSocket proxy hardening (prod)**
+  - Cập nhật cấu hình proxy cho `/ws/` và `/api/ws/` để hỗ trợ Upgrade ổn định: `Connection upgrade`, timeout dài, tắt buffering cho WS.
+
+- **Docs - Troubleshooting**
+  - Thêm tài liệu xử lý lỗi “kẹt cổng” (localhost OK nhưng IP LAN fail) và các câu lệnh kiểm tra/xoá/tạo `portproxy` + firewall:
+    - `docs/troubleshooting/bugs_ket_port_local.md`
+
 ## 2026-04-24
 
 - **Docs**

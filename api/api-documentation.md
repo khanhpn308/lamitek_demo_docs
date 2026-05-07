@@ -58,6 +58,97 @@
 ### DELETE `/users/{user_id}`
 
 - Xóa user.
+
+## 4. WebSocket (Realtime Data Streaming)
+
+### WS `/ws/global`
+
+**URL**: `ws://localhost:8000/api/ws/global`
+
+**Mục đích**: Realtime broadcast sensor data tới tất cả frontend clients (GlobalDashboard).
+
+**Cách kết nối**:
+
+```javascript
+const ws = new WebSocket("ws://localhost:8000/api/ws/global");
+ws.onmessage = (e) => {
+  const data = JSON.parse(e.data);
+  console.log("Device:", data.device_id, "Temp:", data.temperature);
+};
+```
+
+**Payload nhận** (ví dụ):
+
+```json
+{
+  "device_id": "101",
+  "sensor_type": "temperature",
+  "temperature": 28.5,
+  "ts": 1714000000,
+  "server_receive_ms": 1714000001234
+}
+```
+
+**Ghi chú**:
+
+- Server chỉ broadcast dữ liệu; client không cần gửi gì.
+- Kết nối sẽ maintain mở cho tới khi client close hoặc connection break.
+- Dữ liệu từ MQTT Subscriber qua RealtimeHub broadcast.
+
+### WS `/ws/devices/{device_id}`
+
+**URL**: `ws://localhost:8000/api/ws/devices/101`
+
+**Mục đích**: Realtime data của **một thiết bị cụ thể** (Device Dashboard).
+
+**Payload nhận**: Tương tự `/ws/global` nhưng chỉ có data của `device_id` khi request.
+
+**Cách dùng**: Khi hiển thị dashboard chi tiết của 1 device (chart, timeline), dùng endpoint này để nhận data riêng thay vì filter từ global stream.
+
+### WS `/ws/esp32/{device_id}`
+
+**URL**: `ws://localhost:8000/api/ws/esp32/101`
+
+**Mục đích**: **Bi-directional** kết nối từ thiết bị ESP32/IoT device.
+
+**Uplink (device → server)**:
+
+```json
+{
+  "device_id": "101",
+  "temperature": 28.5,
+  "humidity": 65,
+  "timestamp_ms": 1714000012345
+}
+```
+
+Server sẽ echo lại: `{"ok": true, "received": {...}}`.
+
+**Downlink (server → device)** [Future]:
+Server có thể gửi command qua REST API; framework support sẵn via `hub.send_to_esp32(device_id, msg)`.
+
+**Binary support**:
+
+- Device có thể gửi binary frame (ví dụ protobuf); server echo bytes count.
+- Empty string → server phản hồi pong.
+
+**Ví dụ Arduino/ESP32 code**:
+
+```cpp
+void setup() {
+  webSocket.begin("server", 8000, "/api/ws/esp32/101");
+}
+
+void loop() {
+  webSocket.loop();
+
+  // Send JSON telemetry
+  String payload = "{\"temperature\": 28.5, \"humidity\": 65}";
+  webSocket.sendTXT(payload);
+  delay(5000);
+}
+```
+
 - Không được xóa chính mình.
 
 ## 4. Nhóm Devices

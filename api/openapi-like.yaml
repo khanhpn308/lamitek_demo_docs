@@ -15,6 +15,7 @@ tags:
   - name: authorizations
   - name: health
   - name: mqtt
+  - name: websocket
 paths:
   /api/health:
     get:
@@ -542,6 +543,65 @@ paths:
         "503":
           description: Influx service chưa được khởi tạo
 
+# WebSocket không thuộc OpenAPI 3 chuẩn cho FastAPI, nên không xuất hiện trong /openapi.json và Swagger UI.
+# Để vẫn có tài liệu trong file này, dùng extension key `x-websocket-paths` bên dưới.
+x-websocket-paths:
+  /api/ws/global:
+    tag: websocket
+    summary: Stream realtime global cho toàn bộ frontend dashboard
+    description: |
+      Server broadcast dữ liệu cảm biến realtime từ MQTT đã chuẩn hóa.
+      Client chỉ cần mở kết nối và nhận frame JSON; không bắt buộc gửi dữ liệu lên.
+    serverToClientMessage:
+      $ref: "#/components/schemas/RealtimeSensorMessage"
+    test:
+      url: ws://localhost:8000/api/ws/global
+      notes:
+        - Swagger UI (/docs) không test được WebSocket endpoint.
+        - Dùng Postman WebSocket, Insomnia, hoặc wscat để test.
+
+  /api/ws/devices/{device_id}:
+    tag: websocket
+    summary: Stream realtime theo từng thiết bị
+    description: |
+      Chỉ phát dữ liệu có device_id tương ứng với path param.
+    pathParams:
+      device_id:
+        type: string
+        example: "101"
+    serverToClientMessage:
+      $ref: "#/components/schemas/RealtimeSensorMessage"
+    test:
+      url: ws://localhost:8000/api/ws/devices/101
+
+  /api/ws/esp32/{device_id}:
+    tag: websocket
+    summary: Kết nối WebSocket 2 chiều cho ESP32
+    description: |
+      Device gửi telemetry dạng JSON hoặc binary frame.
+      Server trả ack/pong/echo, đồng thời duy trì kết nối theo device_id.
+    pathParams:
+      device_id:
+        type: string
+        example: "101"
+    clientToServerMessage:
+      oneOf:
+        - $ref: "#/components/schemas/Esp32TelemetryMessage"
+        - type: string
+          description: Text bất kỳ (server echo lại)
+        - type: string
+          format: binary
+          description: Binary frame (server phản hồi độ dài bytes)
+    serverToClientMessage:
+      oneOf:
+        - $ref: "#/components/schemas/Esp32AckMessage"
+        - $ref: "#/components/schemas/Esp32PongMessage"
+    test:
+      url: ws://localhost:8000/api/ws/esp32/101
+      notes:
+        - Có thể gửi `{}` để nhận ack.
+        - Có thể gửi chuỗi rỗng để nhận pong.
+
 components:
   securitySchemes:
     bearerAuth:
@@ -825,3 +885,81 @@ components:
           type: string
           format: date
           nullable: true
+    RealtimeSensorMessage:
+      type: object
+      description: Payload realtime server broadcast về dashboard.
+      properties:
+        device_id:
+          type: string
+          example: "101"
+        sensor_type:
+          type: string
+          example: temperature
+        temperature:
+          type: number
+          format: float
+          nullable: true
+        vibration:
+          type: number
+          format: float
+          nullable: true
+        voltage:
+          type: number
+          format: float
+          nullable: true
+        current:
+          type: number
+          format: float
+          nullable: true
+        ts:
+          type: number
+          format: double
+          description: Unix epoch seconds
+        server_receive_ms:
+          type: integer
+          format: int64
+          nullable: true
+    Esp32TelemetryMessage:
+      type: object
+      description: Payload uplink từ ESP32 lên server.
+      properties:
+        device_id:
+          type: string
+          example: "101"
+        temperature:
+          type: number
+          format: float
+          nullable: true
+        humidity:
+          type: number
+          format: float
+          nullable: true
+        timestamp_ms:
+          type: integer
+          format: int64
+          nullable: true
+    Esp32AckMessage:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        device_id:
+          type: string
+          example: "101"
+        received:
+          type: object
+          additionalProperties: true
+          nullable: true
+    Esp32PongMessage:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        type:
+          type: string
+          example: pong
+        device_id:
+          type: string
+          example: "101"
