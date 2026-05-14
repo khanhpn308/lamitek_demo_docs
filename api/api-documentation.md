@@ -160,7 +160,7 @@ void loop() {
 ### POST `/devices` (admin)
 
 - Tạo mới thiết bị.
-- Có thể truyền thêm `topic` để lưu topic MQTT mặc định cho thiết bị.
+- Có thể truyền thêm `topic` để lưu topic MQTT nhận mặc định cho thiết bị và `publish_topic` để lưu topic MQTT gửi/echo về thiết bị.
 
 ### GET `/devices/my`
 
@@ -173,23 +173,25 @@ void loop() {
 - Response bổ sung:
   - `authorized_users`: danh sách user được phân quyền RBAC (`user_id`, `username`, `fullname`, `expired_at`).
   - `user_device_asignment_id`: chỉ có giá trị thật khi caller là **admin**; user thường nhận `null` (không lộ trường legacy).
-  - `topic`: topic MQTT đang lưu trên bản ghi thiết bị.
+  - `topic`: topic MQTT nhận đang lưu trên bản ghi thiết bị.
+  - `publish_topic`: topic MQTT gửi đang lưu trên bản ghi thiết bị.
 
 ### PATCH `/devices/{device_id}` (admin)
 
 - Cập nhật một phần thiết bị, gồm `user_device_asignment_id` (gán tài khoản legacy trên bản ghi thiết bị).
-- Hỗ trợ cập nhật `topic`; backend sẽ tự đồng bộ subscribe/unsubscribe runtime theo topic mới.
+- Hỗ trợ cập nhật `topic` và `publish_topic`; backend sẽ tự đồng bộ subscribe/unsubscribe runtime theo `topic` mới.
 
 ### GET `/devices/topics` (admin)
 
-- Danh sách topic MQTT đã lưu theo từng thiết bị.
+- Danh sách topic MQTT đã lưu theo từng thiết bị, gồm `topic` (nhận) và `publish_topic` (gửi).
 - Dùng cho UI admin trang quản lý topic.
 
 ### PUT `/devices/{device_id}/topic` (admin)
 
-- Cập nhật riêng `topic` cho một thiết bị.
-- Body: `{ "topic": "devices/101/telemetry" }` hoặc `{ "topic": null }` để xóa.
-- Sau khi cập nhật DB, backend tự đồng bộ subscribe/unsubscribe runtime.
+- Cập nhật riêng `topic` và `publish_topic` cho một thiết bị.
+- Body ví dụ: `{ "topic": "devices/101/telemetry", "publish_topic": "devices/101/downlink" }`.
+- Có thể gửi `null` cho từng field để xóa riêng giá trị đó.
+- Sau khi cập nhật DB, backend tự đồng bộ subscribe/unsubscribe runtime theo `topic`.
 
 ### DELETE `/devices/{device_id}` (admin)
 
@@ -246,6 +248,13 @@ void loop() {
 - Truy vấn dữ liệu từ InfluxDB trong `minutes` phút gần nhất (mặc định 30, max 180).
 - Nếu truyền `device_id`, chỉ lấy dữ liệu của thiết bị đó.
 
+### POST `/test/send` (admin)
+
+- Dùng để gửi gói test MQTT dạng text giống WebSocket, không còn dùng payload protobuf kèm timestamp delay như trước.
+- Body: `{ "protocol": "mqtt", "gateway_id": "tempt-01", "node_id": "node_01", "message": "PING|hello" }`
+- Backend publish payload UTF-8 trực tiếp lên topic downlink cấu hình cho test.
+- Nếu payload bắt đầu bằng `PING|`, subscriber MQTT sẽ echo lại payload tương tự về topic gửi của thiết bị nếu có, hoặc topic nhận nếu không có `publish_topic`.
+
 ### WebSocket realtime
 
 - `ws://<host>/ws/global`: luồng realtime cho Global Dashboard.
@@ -269,5 +278,5 @@ void loop() {
 - Đường dẫn frontend: `/topic-management` (admin only).
 - Chức năng:
   - xem topic runtime đang subscribe,
-  - cập nhật `device.topic` theo từng thiết bị,
+  - cập nhật `device.topic` và `device.publish_topic` theo từng thiết bị,
   - đồng bộ subscribe runtime ngay sau khi lưu.

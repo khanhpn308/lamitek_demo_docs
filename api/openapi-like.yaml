@@ -15,6 +15,7 @@ tags:
   - name: authorizations
   - name: health
   - name: mqtt
+  - name: test
   - name: websocket
 paths:
   /api/health:
@@ -32,43 +33,43 @@ paths:
         "200":
           description: DB hoạt động bình thường
         "503":
-          description: DB không khả dụng
-
-  /api/auth/login:
-    post:
-      tags: [auth]
-      summary: Đăng nhập
-      requestBody:
-        required: true
-        content:
-          application/json:
+      get:
+        tags: [test]
+        summary: Lấy danh sách log test
+        security:
+          - bearerAuth: []
+        parameters:
+          - in: query
+            name: limit
+            required: false
             schema:
-              $ref: "#/components/schemas/LoginRequest"
-      responses:
-        "200":
-          description: Đăng nhập thành công
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TokenResponse"
-        "401":
-          description: Sai thông tin đăng nhập
-        "403":
-          description: Tài khoản bị vô hiệu hóa
-
-  /api/auth/register:
-    post:
-      tags: [auth]
-      summary: Tạo tài khoản mới (admin)
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
+              type: integer
+              minimum: 1
+              maximum: 1000
+              default: 100
+          - in: query
+            name: device_name
+            required: false
             schema:
-              $ref: "#/components/schemas/RegisterRequest"
-      responses:
+              type: string
+              nullable: true
+          - in: query
+            name: protocol
+            required: false
+            schema:
+              type: string
+              nullable: true
+          - in: query
+            name: device_id
+            required: false
+            schema:
+              type: string
+              nullable: true
+        responses:
+          "200":
+            description: Thành công
+          "403":
+            description: Không có quyền admin
         "200":
           description: Tạo tài khoản thành công
           content:
@@ -543,6 +544,91 @@ paths:
         "503":
           description: Influx service chưa được khởi tạo
 
+  /api/test/config:
+    get:
+      tags: [test]
+      summary: Lấy cấu hình test mode (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Thành công
+        "403":
+          description: Không có quyền admin
+    put:
+      tags: [test]
+      summary: Cập nhật cấu hình test mode (admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestConfigPayload"
+      responses:
+        "200":
+          description: Thành công
+        "403":
+          description: Không có quyền admin
+
+  /api/test/send:
+    post:
+      tags: [test]
+      summary: Gửi payload test MQTT dạng text (admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestSendPayload"
+      responses:
+        "200":
+          description: Thành công
+        "403":
+          description: Không có quyền admin
+
+  /api/test/logs:
+    get:
+      tags: [test]
+      summary: Lấy danh sách log test
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - in: query
+          name: device_name
+          required: false
+          schema:
+            type: string
+            nullable: true
+        - in: query
+          name: protocol
+          required: false
+          schema:
+            type: string
+            nullable: true
+        - in: query
+          name: device_id
+          required: false
+          schema:
+            type: string
+            nullable: true
+      responses:
+        "200":
+          description: Thành công
+        "403":
+          description: Không có quyền admin
+
 # WebSocket không thuộc OpenAPI 3 chuẩn cho FastAPI, nên không xuất hiện trong /openapi.json và Swagger UI.
 # Để vẫn có tài liệu trong file này, dùng extension key `x-websocket-paths` bên dưới.
 x-websocket-paths:
@@ -743,6 +829,9 @@ components:
         topic:
           type: string
           nullable: true
+        publish_topic:
+          type: string
+          nullable: true
     DevicePublic:
       type: object
       properties:
@@ -760,6 +849,9 @@ components:
           type: string
           nullable: true
         topic:
+          type: string
+          nullable: true
+        publish_topic:
           type: string
           nullable: true
     DeviceDetailPublic:
@@ -782,6 +874,9 @@ components:
           type: string
           nullable: true
         topic:
+          type: string
+          nullable: true
+        publish_topic:
           type: string
           nullable: true
         user_device_asignment_id:
@@ -830,6 +925,9 @@ components:
         topic:
           type: string
           nullable: true
+        publish_topic:
+          type: string
+          nullable: true
         user_device_asignment_id:
           type: integer
           nullable: true
@@ -846,12 +944,48 @@ components:
         topic:
           type: string
           nullable: true
+        publish_topic:
+          type: string
+          nullable: true
     DeviceTopicUpdate:
       type: object
       properties:
         topic:
           type: string
           nullable: true
+        publish_topic:
+          type: string
+          nullable: true
+    TestConfigPayload:
+      type: object
+      required: [enabled, protocol, gateway_id, node_id, device_id, message]
+      properties:
+        enabled:
+          type: boolean
+        protocol:
+          type: string
+          enum: [mqtt, websocket]
+        gateway_id:
+          type: string
+        node_id:
+          type: string
+        device_id:
+          type: string
+        message:
+          type: string
+    TestSendPayload:
+      type: object
+      required: [protocol, gateway_id, node_id, message]
+      properties:
+        protocol:
+          type: string
+          enum: [mqtt]
+        gateway_id:
+          type: string
+        node_id:
+          type: string
+        message:
+          type: string
     AuthorizationCreate:
       type: object
       required: [device_id, user_id]
