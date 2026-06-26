@@ -1,8 +1,8 @@
 # Tài Liệu Thiết Kế Giao Diện (UI/UX)
 
 - **Mã tài liệu**: UIUX-IOT-001
-- **Phiên bản**: 1.0.0
-- **Ngày cập nhật**: 2026-04-06
+- **Phiên bản**: 1.1.0
+- **Ngày cập nhật**: 2026-06-25
 
 ## 1. Mục tiêu trải nghiệm
 
@@ -25,12 +25,14 @@
   - `/forgot-password`
 - Private:
   - `/home`
-  - `/dashboard`
+  - `/dashboard` (Telemetry)
+  - `/dashboard/gps` (GPS Tracking)
   - `/devices`
   - `/devices/:deviceId`
   - `/change-password`
 - Admin:
   - `/user-management`
+  - `/topic-management` (Quản lý topic MQTT)
 
 ## 4. Mô tả màn hình chính
 
@@ -61,6 +63,17 @@
 - Tự giãn cột và nhãn trục X theo số lượng thiết bị; khi thêm thiết bị mới thì tự xuất hiện trên biểu đồ.
 - Ẩn nhãn tên thiết bị trên trục X (để giao diện gọn), tên thiết bị hiển thị trong tooltip khi hover vào cột.
 - Mỗi biểu đồ có nút phóng to/thu nhỏ toàn màn hình để quan sát chi tiết.
+- **Empty state:** khi một chỉ số chưa có thiết bị nào có giá trị > 0 (chưa nhận telemetry),
+  biểu đồ hiển thị thông báo "Chưa có dữ liệu" + icon thay vì trục trống. Khi đó không render
+  `BarChart` (nên cũng không có cursor tooltip).
+- **Cursor tooltip:** dùng nền mờ nhẹ (`rgba(148,163,184,0.12)`) thay cho ô xám đặc mặc định
+  của recharts (vốn phủ kín category band gây che biểu đồ khi ít thiết bị).
+
+### 4.4.1 GPS Tracking (`/dashboard/gps`)
+- Bản đồ SVG theo khu vực (`MapViewer`), ánh xạ toạ độ `x`/`y` theo phần trăm.
+- Dropdown chọn khu vực (đồng bộ từ `/api/locations`), tìm kiếm + danh sách thiết bị realtime.
+- Polling 15s đồng bộ vị trí từ InfluxDB (`/api/mqtt/history`).
+- Chuyển nhanh giữa Telemetry và GPS qua Hamburger Menu ở `Layout`.
 
 ### 4.5 Devices
 - Danh sách thiết bị.
@@ -89,6 +102,11 @@
 - Xóa user có xác nhận.
 - Gán thiết bị cho user.
 
+### 4.9 Topic Management (Admin)
+- Bảng gán topic nhận (subscribe) / topic gửi (publish) theo từng thiết bị.
+- Hiển thị danh sách topic runtime đang subscribe.
+- Lưu từng dòng → backend tự subscribe/unsubscribe; bỏ trống để xoá giá trị.
+
 ## 5. Quy tắc tương tác
 
 - Mọi thao tác submit phải disable nút khi đang xử lý.
@@ -100,7 +118,9 @@
 
 - Domain components:
   - `Layout`, `ProtectedRoute`, `AdminRoute`
-  - `AddDeviceModal`, `AssignDeviceModal`, `ChangePasswordModal`
+  - `AddDeviceModal`, `AssignDeviceModal`, `ChangePasswordModal` (modal dựng trên `<Dialog>`/`<AlertDialog>` shadcn)
+- Component dùng chung (theo token), trong `app_service/src/components/common/`:
+  - `PageHeader`, `Panel`, `StatCard`, `StatusBadge`
 - Primitive UI components:
   - đặt trong `app_service/src/components/ui/`
 - Quy ước callback:

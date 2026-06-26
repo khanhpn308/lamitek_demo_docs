@@ -116,11 +116,15 @@ ws.onmessage = (e) => {
 ```json
 {
   "device_id": "101",
+  "sensor_type": "temperature",
   "temperature": 28.5,
-  "humidity": 65,
   "timestamp_ms": 1714000012345
 }
 ```
+
+> Layout đầy đủ (các loại cảm biến, alias trường, bộ mã `sensor_type`, định dạng binary/protobuf)
+> xem **[esp32-payload-spec.md](./esp32-payload-spec.md)**. Lưu ý: backend hiện KHÔNG xử lý
+> trường `humidity` — chỉ `temperature`, `vibration`, `voltage`/`current`, `x`/`y`/`location`.
 
 Server sẽ echo lại: `{"ok": true, "received": {...}}`.
 
@@ -143,7 +147,7 @@ void loop() {
   webSocket.loop();
 
   // Send JSON telemetry
-  String payload = "{\"temperature\": 28.5, \"humidity\": 65}";
+  String payload = "{\"sensor_type\": \"temperature\", \"temperature\": 28.5}";
   webSocket.sendTXT(payload);
   delay(5000);
 }
@@ -210,7 +214,14 @@ void loop() {
 - Tạo phân quyền user-thiết bị.
 - Trùng cặp `device_id + user_id` trả `409`.
 
-## 6. Nhóm Health/MQTT
+## 6. Nhóm Locations & GPS
+
+### GET `/locations`
+
+- Trả về danh sách các tên location có sẵn (được quét từ thư mục floorplans SVG trên server).
+- Định dạng response: `{ "data": ["zone-1", "warehouse-a", ...] }`.
+
+## 7. Nhóm Health/MQTT
 
 ### GET `/health`
 

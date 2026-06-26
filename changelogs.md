@@ -1,5 +1,76 @@
 # Changelog (docs)
 
+## 2026-06-25
+
+- **Frontend — Refactor design system & sửa lỗi chất lượng**
+  - **i18n**: Khôi phục dấu tiếng Việt cho `GlobalDashboard.jsx` và `TopicManagement.jsx` (trước đó hiển thị không dấu).
+  - **Bug trạng thái thiết bị**: Thêm `src/lib/deviceStatus.js` (`toUiStatus`/`isOnline`) chuẩn hoá `active`/`deactive` (backend) và `online`/`offline` (mock) về một dạng. Sửa `Devices.jsx`/`DeviceDetail.jsx` để thiết bị `active` hiển thị đúng **ONLINE** (trước đây luôn hiện offline do so sánh `=== 'online'`).
+  - **Gỡ nút Turn On/Off giả** trên `DeviceCard` (chỉ đổi state local, không gọi API) + dọn dead code (`handleDeviceClick`, `navigate`).
+  - **Home**: Thêm banner đánh dấu "Dữ liệu demo" (vẫn dùng `mockData.js`; backend chưa có endpoint summary/alerts).
+  - **Design tokens**: Override toàn bộ token màu trong `src/styles/global.css` `:root` cho khớp theme slate/blue thực tế (vd `--card #1e293b`, `--primary #2563eb`) — token gốc từ `webflow.css` không khớp. Xem `docs/design/frontend-design-tokens.md` v2.0.0.
+  - **Component dùng chung**: Thêm `src/components/common/` (`PageHeader`, `Panel`, `StatCard`, `StatusBadge`).
+  - **Token hoá toàn bộ trang/component**: Thay hard-code `slate-*` bằng token (`bg-card`, `text-foreground`, `text-muted-foreground`...) ở mọi page + `Layout`, modal, route guard. Giữ: gradient nền Login, màu chart recharts, màu semantic (online/offline/cảnh báo).
+  - **Accessibility**: Chuyển modal xoá thiết bị sang `<AlertDialog>` và `ChangePasswordModal` sang `<Dialog>` shadcn (focus-trap, đóng bằng ESC). Đặt `<html lang="vi">`. Thêm React Router future flags (`v7_startTransition`, `v7_relativeSplatPath`).
+
+- **Frontend — Sửa lỗi Dashboard Telemetry**
+  - **Khối xám che biểu đồ**: Cursor mặc định của recharts là ô xám đặc phủ kín category band → khối lớn che plot khi ít thiết bị. Đổi sang `cursor={{ fill: 'rgba(148,163,184,0.12)' }}`.
+  - **Empty state**: Khi một chỉ số chưa có thiết bị nào có giá trị > 0, biểu đồ hiển thị "Chưa có dữ liệu" + icon thay vì trục trống (và không render `BarChart`).
+  - Files: `app_service/src/pages/GlobalDashboard.jsx`.
+
+- **Deploy — Nginx cache & cấu hình dev**
+  - `nginx/prod.conf` + `nginx/prod.https.conf`: `index.html` → `Cache-Control: no-cache` (luôn nhận bản deploy mới), `/assets/*` (file có hash) → `immutable` cache 1 năm. Trước đó index.html bị cache khiến client kẹt bundle cũ.
+  - Thêm `app_service/.env.local` (gitignored) cho Vite dev trỏ tới backend Docker (`VITE_API_URL=http://localhost:8001`); bổ sung mẫu vào `.env.example`. KHÔNG đụng `.env` production của docker-compose.
+
+- **Docs — Đồng bộ tài liệu với codebase**
+  - Cập nhật: `design/frontend-design-tokens.md` (v2.0.0 — token override slate/blue), `guidelines/frontend-guidelines.md`, `design/ui-ux-design.md`, `overview.md`, `architecture/codebase-walkthrough.md` cho khớp các thay đổi frontend ở trên.
+  - **`app_service-functions.md`**: Thêm generator `app_service/scripts/gen_functions_doc.py` và regenerate (105 file / 498 function). Sửa lỗi tiếng Việt không dấu ở header + đồng bộ lại với codebase (bỏ `pages/Dashboard.jsx` đã xoá, `handleToggleStatus`/`handleDeviceClick` đã gỡ; cập nhật line number; bổ sung `common/*`, `lib/deviceStatus.js`). File này KHÔNG sửa tay — chạy lại script để cập nhật.
+  - **Mới**: `api/esp32-payload-spec.md` — đặc tả đầy đủ layout dữ liệu ESP32 → server (topic, bộ mã cảm biến 1-4, JSON + alias trường, 4 định dạng binary/protobuf, schema thống nhất sau giải mã). Nguồn chân lý: `payload_decoder.py` + `test_payload_codec.py`. Bổ sung mục 1.1: **endpoint gửi dữ liệu cụ thể** (bảng host:port + URL cho MQTT 1883/9001 và WS `/api/ws/esp32/{id}` qua nginx :80 / dev :8001) kèm 4 ví dụ: `mosquitto_pub`, ESP32 MQTT (PubSubClient), ESP32 WebSocket (links2004), và WS từ trình duyệt.
+  - Sửa `api/api-documentation.md`: bỏ trường `humidity` trong ví dụ uplink (backend không xử lý) + trỏ tới spec mới.
+
+## 2026-05-17
+
+- **GPS Dashboard & InfluxDB Realtime Integration**
+  - **Backend**:
+    - Triển khai endpoint `GET /api/locations`: Tự động quét thư mục `assets/floorplans/` và trả về danh sách bản đồ SVG khả dụng.
+    - Cấu hình `locations_routes.py` và đăng ký vào `api_router`.
+  - **Frontend**:
+    - Xây dựng hệ thống GPS Tracking hoàn chỉnh:
+      - `MapViewer.jsx`: Xử lý hiển thị bản đồ SVG và ánh xạ tọa độ `x`, `y` động theo tỷ lệ phần trăm (0-100%).
+      - `GPSDashboard.jsx`: Giao diện điều khiển với dropdown chọn khu vực (location) tự động đồng bộ từ API, thanh tìm kiếm thiết bị và danh sách thiết bị realtime.
+      - `GPSPage.jsx`: Trang tích hợp dữ liệu thực tế, thực hiện gộp dữ liệu từ MySQL (danh sách thiết bị) và InfluxDB (tọa độ mới nhất qua `/api/mqtt/history`).
+    - Cơ chế cập nhật: Thiết lập polling 15 giây để đồng bộ vị trí thiết bị liên tục từ InfluxDB.
+    - UI/UX: Bổ sung nút Hamburger Menu tại `Layout.jsx` hỗ trợ chuyển đổi nhanh giữa các Dashboard (Telemetry vs GPS).
+  - **Fixes**: Khắc phục triệt để lỗi encoding ký tự lạ và lỗi render màn hình trắng (White Screen) do truy cập thuộc tính undefined.
+
+  - **Files changed when adding `location` field**:
+    - `database_service/sql/004_device_ui_columns.sql` (migration to add `location` column)
+    - `database_service/sql/schema.sql` (schema includes `location`)
+    - `app_service/backend/app/core/db_migrate.py` (db migrate entry for `location`)
+    - `app_service/backend/app/models/device.py` (ORM: `location` column)
+    - `app_service/backend/app/schemas/devices.py` (Pydantic schemas include `location`)
+    - `app_service/backend/app/api/devices_routes.py` (use `location` in create/update handlers)
+    - `app_service/backend/app/core/payload_decoder.py` (normalize/propagate `location`)
+    - `app_service/backend/app/core/influx_service.py` (tag/write `location` to Influx)
+    - `app_service/src/types/device.ts` (TypeScript type: `location`)
+    - `app_service/src/components/AddDeviceModal.jsx` (UI: add/edit `location`)
+    - `app_service/src/components/devices/DeviceTableRow.tsx` (show `location`)
+    - `app_service/src/pages/Devices.jsx` (list/filter by `location`)
+    - `app_service/src/pages/DeviceDetail.jsx` (device detail shows `location`)
+    - `app_service/src/pages/GPSPage.jsx` & `app_service/src/components/Dashboard/GPS/GPSDashboard.jsx` (GPS view uses `location`)
+    - `app_service/src/data/mockData.js` (mock devices include `location`)
+    - `docs/api/api-documentation.md`, `docs/api/openapi-like.yaml`, `docs/api/api_design.csv` (API contract updated to include `location`)
+
+- **Frontend - Thiết kế & Triển khai Dashboard Thiết bị**
+  - Thiết kế JSON Schema chuẩn cho endpoint REST `/api/devices` và kênh WebSocket `/ws/devices/{device_id}`, thống nhất kiểu dữ liệu `device_id` là `integer` xuyên suốt hệ thống.
+  - Xây dựng Component Tree Blueprint theo mô hình Smart/Dumb components để tối ưu hiệu năng và khả năng bảo trì.
+  - Triển khai mã nguồn thực tế:
+    - `src/types/device.ts`: Định nghĩa TypeScript Interfaces nghiêm ngặt cho Device và Authorization.
+    - `src/lib/axios.ts`: Cấu hình API client hỗ trợ Bearer Token và tiền tố `/api`.
+    - `src/hooks/useDevices.ts`: Custom hook xử lý fetch dữ liệu, trạng thái loading và error handling.
+    - `src/components/devices/`: Bộ UI components hoàn chỉnh gồm `DeviceFilters`, `DeviceTable`, `DeviceTableRow`, và `DeviceTableSkeleton` (skeleton loading).
+    - `src/pages/Devices.tsx`: Trang danh sách thiết bị tích hợp logic lọc tìm kiếm client-side và điều hướng.
+  - Công nghệ sử dụng: React 19 (Functional Components + Hooks), Tailwind CSS, shadcn/ui, Axios, Lucide React.
+
 ## 2026-05-07
 
 - **Backend - Refactoring**

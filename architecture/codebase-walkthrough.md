@@ -41,9 +41,10 @@ app_service/
 ├── src/                  # React (Vite)
 │   ├── main.jsx          # mount React
 │   ├── App.jsx           # bọc IoTApp
-│   ├── components/       # Layout, route guards, modal; ui/ = shadcn/ui
+│   ├── components/       # Layout, route guards, modal; ui/ = shadcn/ui;
+│   │                     #   common/ = component theo token; Dashboard/GPS/ = GPS tracking
 │   ├── contexts/         # AuthContext — JWT trong localStorage
-│   ├── lib/              # apiFetch, base URL, utils
+│   ├── lib/              # apiFetch, base URL, utils, deviceStatus, wsUrl
 │   └── pages/            # Màn hình theo route
 └── nginx/                # Cấu hình reverse proxy (production)
 ```

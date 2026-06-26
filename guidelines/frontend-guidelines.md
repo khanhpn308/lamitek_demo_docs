@@ -1,22 +1,24 @@
 # Quy Định Cấu Trúc Mã Nguồn Frontend
 
 - **Mã tài liệu**: FE-GUIDE-001
-- **Phiên bản**: 1.0.0
-- **Ngày cập nhật**: 2026-04-04
+- **Phiên bản**: 1.1.0
+- **Ngày cập nhật**: 2026-06-25
 
 ## 1. Kiến trúc thư mục chuẩn
 
 ```text
 app_service/
-  src/components/      # reusable components và layout
-  src/components/ui/   # primitive UI components
-  src/pages/           # page-level components
-  src/contexts/        # app-wide state (AuthContext)
-  src/lib/             # api client, utils
-  src/hooks/           # custom hooks
-  src/data/            # mock data và helper demo
-  src/styles/          # css global + semantic tokens mapping
-  generated/         # webflow generated design tokens
+  src/components/          # reusable components và layout
+  src/components/ui/       # primitive UI components (shadcn/radix)
+  src/components/common/   # component dùng chung theo token (PageHeader, Panel, StatCard, StatusBadge)
+  src/components/Dashboard/GPS/  # GPS tracking (MapViewer, GPSDashboard)
+  src/pages/               # page-level components
+  src/contexts/            # app-wide state (AuthContext)
+  src/lib/                 # api client, utils, helper (deviceStatus, wsUrl)
+  src/hooks/               # custom hooks
+  src/data/                # mock data và helper demo
+  src/styles/              # css global + semantic tokens mapping
+  generated/               # webflow generated design tokens
 ```
 
 ### Nguyên tắc
@@ -52,7 +54,18 @@ app_service/
 | `AdminRoute` | Không | Chặn route không phải admin |
 | `AddDeviceModal` | `onClose`, `onAdd` | Tạo thiết bị mới |
 | `AssignDeviceModal` | `user`, `currentAdmin`, `onClose`, `onSuccess` | Cấp quyền thiết bị cho user |
-| `ChangePasswordModal` | `deviceId`, `onClose` | Đổi mật khẩu thiết bị (UI hiện tại) |
+| `ChangePasswordModal` | `deviceId`, `onClose` | Đổi mật khẩu thiết bị — dựng trên `<Dialog>` shadcn (focus-trap, ESC) |
+
+### 3.1.1 Component dùng chung (`src/components/common/`)
+
+Trích các pattern lặp lại, dùng design token thay vì hard-code màu. Ưu tiên dùng khi dựng trang mới.
+
+| Component | Props chính | Vai trò |
+|---|---|---|
+| `PageHeader` | `title`, `description`, `actions` | Tiêu đề trang `<h1>` + mô tả + slot action bên phải |
+| `Panel` | `className`, `children` | Khung card/section chuẩn (`bg-card border-border rounded-xl shadow-lg`) |
+| `StatCard` | `title`, `value`, `icon`, `color`, `subtitle` | Thẻ KPI (nền token; `color` là màu semantic do caller truyền) |
+| `StatusBadge` | `status` | Badge ONLINE/OFFLINE, tự chuẩn hoá status qua `isOnline()` |
 
 ### 3.2 Quy ước props
 - Callback dùng tiền tố `on*`.
@@ -74,10 +87,16 @@ app_service/
 
 ## 6. Quy tắc UI nhất quán
 
-- Action chính: dùng token `primary`.
-- Action phá hủy dữ liệu: dùng token `destructive` + xác nhận.
-- Trạng thái online/active: dùng semantic token theo hệ thống trạng thái.
-- Không dùng text mơ hồ; thông báo lỗi phải cụ thể.
+- Action chính: dùng token `primary` (`bg-primary text-primary-foreground`).
+- Action phá hủy dữ liệu: dùng `destructive` + xác nhận qua `<AlertDialog>` (vd modal xoá thiết bị).
+- Trạng thái thiết bị: chuẩn hoá qua `src/lib/deviceStatus.js` (`toUiStatus`/`isOnline`) —
+  backend trả `active`/`deactive`, mock trả `online`/`offline`; UI luôn quy về `online`/`offline`.
+  Hiển thị qua `<StatusBadge>` (online=xanh, offline=đỏ).
+- Trạng thái dữ liệu: khi rỗng phải có **empty state** rõ ràng (vd 4 biểu đồ telemetry hiện
+  "Chưa có dữ liệu" thay vì trục trống).
+- Màu nền/chữ dùng token (`bg-card`, `text-foreground`, `text-muted-foreground`...) — KHÔNG
+  hard-code `slate-*`. Ngoại lệ: màu semantic trạng thái, màu chart, gradient nền Login.
+- Không dùng text mơ hồ; thông báo lỗi phải cụ thể. UI dùng tiếng Việt CÓ DẤU đầy đủ.
 
 ## 7. Tiêu chuẩn typography và color token (enterprise)
 
