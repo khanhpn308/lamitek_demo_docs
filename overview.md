@@ -204,7 +204,7 @@ app_service/
 - `src/pages/DeviceDetail.jsx`: chi tiết thiết bị + chart realtime/history.
 - `src/pages/UserManagement.jsx`: quản lý người dùng và phân quyền.
 - `src/pages/TopicManagement.jsx`: quản lý topic MQTT theo thiết bị.
-- `src/pages/GPSPage.jsx`: trang GPS tracking (gộp MySQL + InfluxDB, polling vị trí).
+- `src/pages/GPSPage.jsx`: trang GPS tracking; tải metadata thiết bị qua REST và nhận vị trí live-only từ WebSocket `/ws/global` (không polling InfluxDB).
 - `src/pages/ChangePassword.jsx`: đổi mật khẩu tài khoản.
 - `src/pages/Forbidden.jsx`: trang 403.
 
@@ -213,7 +213,7 @@ app_service/
 - `src/components/AddDeviceModal.jsx`: form tạo device.
 - `src/components/AssignDeviceModal.jsx`: form cấp quyền device cho user.
 - `src/components/ChangePasswordModal.jsx`: modal đổi password theo ngữ cảnh thiết bị (dựng trên `<Dialog>` shadcn).
-- `src/components/Dashboard/GPS/MapViewer.jsx`: render bản đồ SVG + ánh xạ toạ độ x/y.
+- `src/components/Dashboard/GPS/MapViewer.jsx`: render floorplan WebP vừa toàn bộ viewport, dùng chung frame cho ảnh/overlay và ánh xạ hệ tọa độ gốc dưới-trái (`top = 100 - y`).
 - `src/components/Dashboard/GPS/GPSDashboard.jsx`: điều khiển GPS (chọn khu vực, tìm kiếm, danh sách realtime).
 
 ### Frontend component dùng chung (`src/components/common/`)

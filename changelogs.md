@@ -1,5 +1,35 @@
 # Changelog (docs)
 
+## 2026-07-17
+
+- **Frontend — GPS Tracking realtime trực tiếp từ backend**
+  - `GPSPage.jsx` không còn polling `GET /api/mqtt/history` mỗi 15 giây để lấy vị trí.
+  - Danh mục/metadata thiết bị vẫn tải một lần từ REST `/api/devices`; các gói GPS mới được nhận trực tiếp từ WebSocket `/ws/global` có JWT và cập nhật state ngay khi backend broadcast.
+  - WebSocket tự kết nối lại sau 1,2 giây khi bị ngắt. Dữ liệu realtime đến trước REST catalog vẫn được giữ khi hai nguồn được hợp nhất.
+  - Chấp nhận payload GPS đơn hoặc batch, chuẩn hoá alias `device_id`/`deviceId`, `sensor_type`/`sensorType`, timestamp và bỏ qua telemetry không phải GPS.
+  - **Hệ quả cold start**: GPS Dashboard không đọc snapshot từ InfluxDB; sau khi mở trang, marker xuất hiện khi backend phát gói GPS kế tiếp.
+
+- **Frontend — Chuẩn hoá layout và hệ tọa độ bản đồ GPS**
+  - `MapViewer.jsx` lấy tỷ lệ thật từ `naturalWidth`/`naturalHeight`, giới hạn chiều rộng tối đa 800px và tự scale đồng đều theo cả chiều rộng lẫn chiều cao khả dụng để hiển thị trọn ảnh, không crop và không có thanh cuộn nội bộ.
+  - Ảnh floorplan và overlay marker dùng chung một frame nên lưới phần trăm `0..100` luôn phủ đúng kích thước ảnh sau khi scale.
+  - Đổi gốc tọa độ sang **góc dưới bên trái**: X tăng từ trái sang phải; Y tăng từ dưới lên trên; phép chiếu màn hình là `left = x%`, `top = (100 - y)%`.
+  - Thêm kiểm thử hồi quy `MapViewer.test.js` và `gpsRealtime.test.js` cho layout, hệ trục và xử lý payload realtime.
+
+- **Deploy — Frontend Docker phải được build lại khi đổi mã React**
+  - `docker compose restart frontend` chỉ khởi động lại container với image hiện có, không đưa source React mới vào bundle.
+  - Khi chỉ đổi frontend, dùng `docker compose build frontend` rồi `docker compose up -d --no-deps frontend` để cập nhật SPA mà không restart backend/database.
+
+## 2026-07-04
+
+- **Backend — Sửa lỗi dữ liệu WebSocket uplink không được ghi vào InfluxDB**
+  - **Bug**: Dữ liệu gửi qua WebSocket (`/api/ws/esp32/{id}`, `/api/ws/devices/{id}`) chỉ được broadcast realtime (`hub.publish_from_thread`) mà **không** ghi InfluxDB → device page hiển thị realtime nhưng chart lịch sử, bản đồ GPS và Data Explorer đều rỗng. Chỉ đường MQTT mới ghi Influx.
+  - **Fix — tập trung hoá pipeline**: Thêm `app_service/backend/app/core/ingest.py` với hàm dùng chung `ingest_sensor_payload(app, payload)` (ghi Influx + broadcast, mỗi nhánh bọc try/except riêng, lấy `influx`/`realtime_hub` từ `app.state` để tránh vòng import).
+  - `main.py`: `_handle_sensor_payload` (callback MQTT) gọi `ingest_sensor_payload(app, payload)`.
+  - `api/websocket_routes.py`: cả 4 điểm uplink (`ws_esp32` + `ws_device`, frame bytes & JSON) đổi từ `hub.publish_from_thread()` → `ingest_sensor_payload(websocket.app, ...)`. Endpoint `/ws/global` (chỉ broadcast) không đổi.
+  - **Frontend**: `GPSDashboard.jsx` — bộ lọc thiết bị theo location đổi sang so khớp **không phân biệt hoa/thường** (payload gửi `FLOOR_1` nhưng tên file floorplan là `Floor_1` → trước đây không khớp, ẩn thiết bị).
+  - Chi tiết chẩn đoán & xác thực: `docs/bugs/2026-07-04-websocket-uplink-khong-ghi-influxdb.md`.
+  - **Docs**: Cập nhật `adr/ADR-0003-chien-luoc-du-lieu-thiet-bi-realtime.md` (bổ sung điểm hợp lưu `ingest_sensor_payload`) và mục Data Flow.
+
 ## 2026-06-25
 
 - **Frontend — Refactor design system & sửa lỗi chất lượng**

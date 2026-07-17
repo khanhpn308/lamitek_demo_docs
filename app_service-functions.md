@@ -5,9 +5,9 @@
 > KHÔNG sửa tay — chạy lại script để cập nhật.
 
 - Phạm vi quét: `app_service/backend/app` + `app_service/src`
-- Thời điểm tạo: 2026-06-25 13:35:33
-- Số file có function: 105
-- Tổng số function tìm thấy: 498
+- Thời điểm tạo: 2026-07-17 18:15:15
+- Số file có function: 107
+- Tổng số function tìm thấy: 508
 ## app_service/backend/app/api/auth_routes.py
 
 - _user_public (dòng 40, python-def)
@@ -70,10 +70,10 @@
 
 ## app_service/backend/app/api/websocket_routes.py
 
-- _get_realtime_hub (dòng 42, python-def)
-- ws_global (dòng 49, python-async-def)
-- ws_device (dòng 98, python-async-def)
-- ws_esp32 (dòng 187, python-async-def)
+- _get_realtime_hub (dòng 43, python-def)
+- ws_global (dòng 50, python-async-def)
+- ws_device (dòng 99, python-async-def)
+- ws_esp32 (dòng 190, python-async-def)
 
 ## app_service/backend/app/core/config.py
 
@@ -97,7 +97,8 @@
 - ensure_device_topic_column (dòng 155, python-def)
 - ensure_device_publish_topic_column (dòng 174, python-def)
 - _column_exists (dòng 193, python-def)
-- ensure_schema_hardening (dòng 204, python-def)
+- ensure_user_cccd_varchar (dòng 204, python-def)
+- ensure_schema_hardening (dòng 243, python-def)
 
 ## app_service/backend/app/core/db_wait.py
 
@@ -124,6 +125,10 @@
 - status (dòng 92, python-def)
 - write_sensor_point (dòng 104, python-def)
 - query_history (dòng 196, python-def)
+
+## app_service/backend/app/core/ingest.py
+
+- ingest_sensor_payload (dòng 24, python-def)
 
 ## app_service/backend/app/core/mqtt_subscriber.py
 
@@ -182,8 +187,8 @@
 
 ## app_service/backend/app/core/seed.py
 
-- ensure_default_admin (dòng 26, python-def)
-- ensure_default_devices (dòng 53, python-def)
+- ensure_default_admin (dòng 25, python-def)
+- ensure_default_devices (dòng 52, python-def)
 
 ## app_service/backend/app/core/test_payload_codec.py
 
@@ -214,19 +219,19 @@
 
 ## app_service/backend/app/main.py
 
-- lifespan (dòng 53, python-async-def)
-- _handle_sensor_payload (dòng 108, python-def)
-- _resolve_ping_reply_topic (dòng 112, python-def)
-- create_app (dòng 165, python-def)
+- lifespan (dòng 55, python-async-def)
+- _handle_sensor_payload (dòng 111, python-def)
+- _resolve_ping_reply_topic (dòng 115, python-def)
+- create_app (dòng 168, python-def)
 
 ## app_service/backend/app/schemas/auth.py
 
-- cccd_digits (dòng 36, python-def)
-- expired_not_in_past (dòng 43, python-def)
-- validity_days (dòng 66, python-def)
-- remaining_days (dòng 74, python-def)
-- cccd_digits (dòng 97, python-def)
-- cccd_digits (dòng 130, python-def)
+- cccd_digits (dòng 35, python-def)
+- expired_not_in_past (dòng 42, python-def)
+- validity_days (dòng 65, python-def)
+- remaining_days (dòng 73, python-def)
+- cccd_digits (dòng 96, python-def)
+- cccd_digits (dòng 129, python-def)
 
 ## app_service/src/App.jsx
 
@@ -284,7 +289,7 @@
 
 ## app_service/src/components/Dashboard/GPS/MapViewer.jsx
 
-- MapViewer (dòng 9, arrow-function)
+- MapViewer (dòng 3, arrow-function)
 
 ## app_service/src/components/devices/DeviceTable.tsx
 
@@ -785,8 +790,19 @@
 
 ## app_service/src/pages/GPSPage.jsx
 
-- GPSPage (dòng 5, arrow-function)
-- fetchRealGpsData (dòng 10, arrow-function)
+- resolveWsBase (dòng 7, function-declaration)
+- GPSPage (dòng 12, arrow-function)
+- fetchDeviceCatalog (dòng 21, arrow-function)
+- connect (dòng 43, arrow-function)
+
+## app_service/src/pages/gpsRealtime.js
+
+- toFiniteNumber (dòng 1, function-declaration)
+- getDeviceId (dòng 6, function-declaration)
+- getTimestampIso (dòng 10, function-declaration)
+- getGpsUpdates (dòng 20, function-declaration)
+- mergeGpsMessage (dòng 42, function-declaration)
+- mergeDeviceCatalog (dòng 76, function-declaration)
 
 ## app_service/src/pages/Home.jsx
 
@@ -817,6 +833,6 @@
 - openModal (dòng 144, arrow-function)
 - handleStatusChange (dòng 153, arrow-function)
 - handleRegister (dòng 169, arrow-function)
-- openDelete (dòng 220, arrow-function)
-- openAssign (dòng 226, arrow-function)
-- handleDelete (dòng 230, arrow-function)
+- openDelete (dòng 221, arrow-function)
+- openAssign (dòng 227, arrow-function)
+- handleDelete (dòng 231, arrow-function)

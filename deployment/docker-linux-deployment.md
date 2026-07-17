@@ -462,33 +462,36 @@ cd ~/app_service
 git fetch origin
 git status
 git pull origin main
-docker compose up -d --build
+docker compose build frontend
+docker compose up -d --no-deps frontend
 docker compose ps
 ```
 
-Trong `docker-compose.yml` mặc định của `app_service`, **chỉ service `frontend`** có chỉ thị `build:` (Dockerfile). Lệnh `docker compose up -d --build` vì vậy **build lại image SPA/Nginx** khi `Dockerfile`, `package.json` hoặc mã React thay đổi. Service **`backend`** dùng image `python:3.12-slim` và **mount** thư mục `./backend` vào container — **không** có bước build image cho từng lần sửa file Python.
+Trong `docker-compose.yml` hiện tại, cả `frontend` và `backend` đều dùng image build từ source. `docker compose restart frontend` chỉ khởi động lại container bằng image hiện có, **không build lại bundle React**. Khi chỉ đổi frontend, tách `build` và `up --no-deps` như trên để cập nhật SPA/Nginx mà không restart backend, broker hoặc database.
 
-### 9.4 Bắt buộc: reset / khởi động lại backend sau khi cập nhật mã Python
+### 9.4 Bắt buộc: build lại backend sau khi cập nhật mã Python
 
-**Vì sao cần:** Thư mục `backend/` trên máy chủ đã được `git pull` mới, nhưng process **uvicorn** trong container (thường **không** bật `--reload` trên production) **không tự nạp lại** module đã import. Nếu chỉ chạy `docker compose up -d --build`, Compose có thể **không** tạo lại container `backend` (image và cấu hình service không đổi) → backend vẫn hiển thị trạng thái **Up nhiều giờ**, vẫn chạy **mã cũ trong bộ nhớ**, dù file trên đĩa đã mới. Điều này dễ gây lỗi “đã pull code nhưng API/ghi DB vẫn sai”.
+**Vì sao cần:** `Dockerfile.backend` copy source Python vào image. `git pull` hoặc `docker compose restart backend` không thay đổi image đang chạy, nên container vẫn dùng mã Python cũ.
 
-**Cách làm** (chọn một trong các cách; thực hiện **sau** `git pull` và tùy chọn `docker compose up -d --build`):
+**Cách làm** sau `git pull`:
 
 ```bash
 cd ~/app_service
-docker compose restart backend
+docker compose build backend
+docker compose up -d --no-deps backend
 ```
 
-Hoặc ép tạo lại container backend:
+Nếu chỉ đổi `.env` hoặc cấu hình container mà không đổi source, có thể ép tạo lại từ image hiện tại:
 
 ```bash
 docker compose up -d --force-recreate backend
 ```
 
-Có thể kết hợp build frontend và recreate backend một lần:
+Khi frontend và backend cùng thay đổi:
 
 ```bash
-docker compose up -d --build --force-recreate backend
+docker compose build frontend backend
+docker compose up -d --no-deps backend frontend
 ```
 
 Kiểm tra:
@@ -498,14 +501,14 @@ docker compose ps
 docker compose logs backend --tail 80
 ```
 
-Bạn nên thấy backend **vừa khởi động lại** (thời gian “Up” ngắn sau lệnh), và log không báo lỗi import/kết nối DB.
+Bạn nên thấy backend **vừa được tạo lại** (thời gian “Up” ngắn sau lệnh), và log không báo lỗi import/kết nối DB.
 
-**Gợi ý:** Sau khi backend restart, migration trong code (ví dụ `app/core/db_migrate.py`) chạy lại **mỗi khi** process khởi động — hữu ích khi `DB_HOST` trỏ đúng máy database; vẫn nên kiểm tra schema bằng `SHOW COLUMNS` khi cần.
+**Gợi ý:** Sau khi container backend được tạo lại, migration trong code (ví dụ `app/core/db_migrate.py`) chạy mỗi khi process khởi động — hữu ích khi `DB_HOST` trỏ đúng máy database; vẫn nên kiểm tra schema bằng `SHOW COLUMNS` khi cần.
 
 ### 9.5 Thứ tự khuyến nghị khi có bản cập nhật đồng thời
 
 1. Trên **máy Database:** `git pull` trong `database_service`, rồi **chạy các file migration SQL** cần thiết (mục 9.2) nếu volume MySQL đã có dữ liệu.
-2. Trên **máy App:** `git pull` trong `app_service`, `docker compose up -d --build`, sau đó **`docker compose restart backend`** hoặc **`--force-recreate backend`** (mục 9.4), rồi xem log backend (`docker compose logs backend --tail 100`) để xác nhận kết nối DB và không lỗi migration.
+2. Trên **máy App:** `git pull` trong `app_service`, build các service có source thay đổi rồi `docker compose up -d --no-deps <service>` (mục 9.3–9.4); xem log backend (`docker compose logs backend --tail 100`) để xác nhận kết nối DB và không lỗi migration.
 
 ### 9.6 Lưu ý
 
@@ -515,7 +518,7 @@ Bạn nên thấy backend **vừa khởi động lại** (thời gian “Up” n
 
 ### 9.7 Checklist deploy nhanh trên EC2 (chạy một lần)
 
-Mục tiêu: cập nhật `app_service`, restart backend để nạp mã Python mới, và verify nhanh các endpoint quan trọng.
+Mục tiêu: cập nhật `app_service`, build/tạo lại image ứng dụng và verify nhanh các endpoint quan trọng.
 
 ```bash
 # 0) SSH vào EC2 App
@@ -526,11 +529,11 @@ cd ~/app_service
 git fetch origin
 git pull origin main
 
-# 2) Build frontend + bảo đảm service chạy
-docker compose up -d --build
+# 2) Build lại các image ứng dụng
+docker compose build frontend backend
 
-# 3) Bắt buộc restart backend để nạp code Python mới
-docker compose restart backend
+# 3) Tạo lại container từ image mới
+docker compose up -d --no-deps backend frontend
 
 # 4) Kiểm tra nhanh container
 docker compose ps
@@ -584,7 +587,7 @@ Kỳ vọng:
 
 **Nguyên tắc khuyến nghị:**
 
-- Chỉ restart service bị ảnh hưởng để giảm downtime.
+- Chỉ build/tạo lại service bị ảnh hưởng để giảm downtime; `restart` chỉ phù hợp khi chủ ý dùng lại image hiện có.
 - Khi đổi biến môi trường, ưu tiên `--force-recreate` thay vì chỉ `restart`.
 
 #### 9.8.1 `app_service`
@@ -596,11 +599,13 @@ cd ~/app_service
 git fetch origin
 git pull origin main
 
-# Build lại frontend nếu có thay đổi FE/Dockerfile
-docker compose up -d --build frontend
+# Build và tạo lại frontend nếu có thay đổi FE/Dockerfile
+docker compose build frontend
+docker compose up -d --no-deps frontend
 
-# Backend: nạp mã Python mới
-docker compose restart backend
+# Backend: build và tạo lại khi mã Python thay đổi
+docker compose build backend
+docker compose up -d --no-deps backend
 
 # Nếu có đổi .env hoặc compose cho backend
 docker compose up -d --force-recreate backend
@@ -665,7 +670,7 @@ Tóm tắt: dùng Let’s Encrypt (Certbot) và file mẫu `app_service/nginx/pr
 - Không commit file `.env`.
 - Dùng mật khẩu mạnh cho MySQL, JWT secret và Influx token.
 - Bật backup định kỳ cho dữ liệu DB và InfluxDB.
-- Giám sát `docker compose logs` và tài nguyên hệ thống khi build image frontend; sau khi sửa mã Python trong `backend/`, nhớ **restart backend** (mục 9.4).
+- Giám sát `docker compose logs` và tài nguyên hệ thống khi build image; sau khi sửa mã Python trong `backend/`, nhớ **build lại image và tạo lại container backend** (mục 9.4).
 
 ## 13. Tài liệu bổ sung
 

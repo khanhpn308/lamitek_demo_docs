@@ -1,8 +1,8 @@
 # Tài Liệu Thiết Kế Giao Diện (UI/UX)
 
 - **Mã tài liệu**: UIUX-IOT-001
-- **Phiên bản**: 1.1.0
-- **Ngày cập nhật**: 2026-06-25
+- **Phiên bản**: 1.2.0
+- **Ngày cập nhật**: 2026-07-17
 
 ## 1. Mục tiêu trải nghiệm
 
@@ -70,10 +70,20 @@
   của recharts (vốn phủ kín category band gây che biểu đồ khi ít thiết bị).
 
 ### 4.4.1 GPS Tracking (`/dashboard/gps`)
-- Bản đồ SVG theo khu vực (`MapViewer`), ánh xạ toạ độ `x`/`y` theo phần trăm.
-- Dropdown chọn khu vực (đồng bộ từ `/api/locations`), tìm kiếm + danh sách thiết bị realtime.
-- Polling 15s đồng bộ vị trí từ InfluxDB (`/api/mqtt/history`).
-- Chuyển nhanh giữa Telemetry và GPS qua Hamburger Menu ở `Layout`.
+- Bản đồ floorplan WebP theo khu vực (`MapViewer`), ánh xạ tọa độ `x`/`y` trong miền `0..100`.
+- Dropdown chọn khu vực đồng bộ từ `/api/locations`; bộ lọc location không phân biệt hoa/thường; hỗ trợ tìm kiếm và danh sách thiết bị realtime.
+- Metadata thiết bị tải một lần từ `/api/devices`; vị trí nhận trực tiếp từ WebSocket `/ws/global`, không polling InfluxDB.
+- Marker cập nhật ngay khi backend broadcast GPS; WebSocket tự kết nối lại khi gián đoạn.
+- Floorplan rộng tối đa 800px, giữ đúng tỷ lệ ảnh thật và tự thu nhỏ để vừa toàn bộ vùng map theo cả hai trục; không crop và không có thanh cuộn nội bộ.
+- Ảnh và overlay marker dùng chung kích thước sau scale để tọa độ phần trăm không bị lệch.
+- Hệ tọa độ dùng gốc dưới-trái:
+  - `(0,0)`: góc dưới bên trái.
+  - `(100,0)`: góc dưới bên phải.
+  - `(0,100)`: góc trên bên trái.
+  - `(100,100)`: góc trên bên phải.
+  - X tăng từ trái sang phải; Y tăng từ dưới lên trên; phép chiếu CSS: `left = x%`, `top = (100 - y)%`.
+- Khi vừa mở trang, marker xuất hiện sau gói GPS kế tiếp vì màn hình này chủ ý không preload snapshot từ InfluxDB.
+- Chuyển nhanh giữa Telemetry và GPS qua menu điều hướng ở `Layout`.
 
 ### 4.5 Devices
 - Danh sách thiết bị.
