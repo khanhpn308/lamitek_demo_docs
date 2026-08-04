@@ -1,8 +1,8 @@
 # Tài Liệu Thiết Kế Giao Diện (UI/UX)
 
 - **Mã tài liệu**: UIUX-IOT-001
-- **Phiên bản**: 1.2.0
-- **Ngày cập nhật**: 2026-07-17
+- **Phiên bản**: 1.0.1
+- **Ngày cập nhật**: 2026-07-30
 
 ## 1. Mục tiêu trải nghiệm
 
@@ -14,6 +14,9 @@
 ## 2. Nguyên tắc thiết kế
 
 - Chủ đề tối (dark theme) nhất quán.
+- Form hoặc control có nền sáng phải khai báo màu chữ tối rõ ràng; riêng native
+  `select` phải đặt màu cho cả ô chọn và từng `option` để không kế thừa chữ trắng
+  từ dark theme.
 - CTA chính dùng màu xanh dương.
 - Trạng thái thành công dùng xanh lá, lỗi dùng đỏ, cảnh báo dùng vàng.
 - Thành phần hành động quan trọng có xác nhận (xóa user).
@@ -25,14 +28,13 @@
   - `/forgot-password`
 - Private:
   - `/home`
-  - `/dashboard` (Telemetry)
-  - `/dashboard/gps` (GPS Tracking)
+  - `/dashboard`
+  - `/dashboard/gps`
   - `/devices`
   - `/devices/:deviceId`
   - `/change-password`
 - Admin:
   - `/user-management`
-  - `/topic-management` (Quản lý topic MQTT)
 
 ## 4. Mô tả màn hình chính
 
@@ -63,27 +65,6 @@
 - Tự giãn cột và nhãn trục X theo số lượng thiết bị; khi thêm thiết bị mới thì tự xuất hiện trên biểu đồ.
 - Ẩn nhãn tên thiết bị trên trục X (để giao diện gọn), tên thiết bị hiển thị trong tooltip khi hover vào cột.
 - Mỗi biểu đồ có nút phóng to/thu nhỏ toàn màn hình để quan sát chi tiết.
-- **Empty state:** khi một chỉ số chưa có thiết bị nào có giá trị > 0 (chưa nhận telemetry),
-  biểu đồ hiển thị thông báo "Chưa có dữ liệu" + icon thay vì trục trống. Khi đó không render
-  `BarChart` (nên cũng không có cursor tooltip).
-- **Cursor tooltip:** dùng nền mờ nhẹ (`rgba(148,163,184,0.12)`) thay cho ô xám đặc mặc định
-  của recharts (vốn phủ kín category band gây che biểu đồ khi ít thiết bị).
-
-### 4.4.1 GPS Tracking (`/dashboard/gps`)
-- Bản đồ floorplan WebP theo khu vực (`MapViewer`), ánh xạ tọa độ `x`/`y` trong miền `0..100`.
-- Dropdown chọn khu vực đồng bộ từ `/api/locations`; bộ lọc location không phân biệt hoa/thường; hỗ trợ tìm kiếm và danh sách thiết bị realtime.
-- Metadata thiết bị tải một lần từ `/api/devices`; vị trí nhận trực tiếp từ WebSocket `/ws/global`, không polling InfluxDB.
-- Marker cập nhật ngay khi backend broadcast GPS; WebSocket tự kết nối lại khi gián đoạn.
-- Floorplan rộng tối đa 800px, giữ đúng tỷ lệ ảnh thật và tự thu nhỏ để vừa toàn bộ vùng map theo cả hai trục; không crop và không có thanh cuộn nội bộ.
-- Ảnh và overlay marker dùng chung kích thước sau scale để tọa độ phần trăm không bị lệch.
-- Hệ tọa độ dùng gốc dưới-trái:
-  - `(0,0)`: góc dưới bên trái.
-  - `(100,0)`: góc dưới bên phải.
-  - `(0,100)`: góc trên bên trái.
-  - `(100,100)`: góc trên bên phải.
-  - X tăng từ trái sang phải; Y tăng từ dưới lên trên; phép chiếu CSS: `left = x%`, `top = (100 - y)%`.
-- Khi vừa mở trang, marker xuất hiện sau gói GPS kế tiếp vì màn hình này chủ ý không preload snapshot từ InfluxDB.
-- Chuyển nhanh giữa Telemetry và GPS qua menu điều hướng ở `Layout`.
 
 ### 4.5 Devices
 - Danh sách thiết bị.
@@ -112,10 +93,13 @@
 - Xóa user có xác nhận.
 - Gán thiết bị cho user.
 
-### 4.9 Topic Management (Admin)
-- Bảng gán topic nhận (subscribe) / topic gửi (publish) theo từng thiết bị.
-- Hiển thị danh sách topic runtime đang subscribe.
-- Lưu từng dòng → backend tự subscribe/unsubscribe; bỏ trống để xoá giá trị.
+### 4.9 GPS Tracking
+
+- Chọn nhóm bản đồ và khu vực để theo dõi thiết bị realtime.
+- Modal `Thêm ảnh bản đồ` cho phép chọn nhóm có quyền quản lý, nhập location
+  gateway và tải ảnh bản đồ lên.
+- Ô `Nhóm bản đồ` trong modal dùng nền trắng, chữ đen cho cả giá trị hiện tại
+  và các lựa chọn trong danh sách.
 
 ## 5. Quy tắc tương tác
 
@@ -128,9 +112,7 @@
 
 - Domain components:
   - `Layout`, `ProtectedRoute`, `AdminRoute`
-  - `AddDeviceModal`, `AssignDeviceModal`, `ChangePasswordModal` (modal dựng trên `<Dialog>`/`<AlertDialog>` shadcn)
-- Component dùng chung (theo token), trong `app_service/src/components/common/`:
-  - `PageHeader`, `Panel`, `StatCard`, `StatusBadge`
+  - `AddDeviceModal`, `AssignDeviceModal`, `ChangePasswordModal`
 - Primitive UI components:
   - đặt trong `app_service/src/components/ui/`
 - Quy ước callback:

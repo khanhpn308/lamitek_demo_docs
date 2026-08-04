@@ -57,7 +57,11 @@
 
 ### DELETE `/users/{user_id}`
 
-- Xóa user.
+- Admin xóa user khác; không cho xóa chính tài khoản đang đăng nhập.
+- Nếu user là owner nhóm, backend archive toàn bộ map active với lý do `owner_deleted`,
+  dọn membership/invitation, xóa nhóm rồi mới xóa user trong cùng transaction.
+- Membership của user trong nhóm do người khác sở hữu chỉ bị dọn; group và map của owner khác được giữ nguyên.
+- Trả `409` nếu lifecycle không thể hoàn tất an toàn; transaction được rollback.
 
 ## 4. WebSocket (Realtime Data Streaming)
 
@@ -70,7 +74,11 @@
 **Cách kết nối**:
 
 ```javascript
-const ws = new WebSocket("ws://localhost:8000/api/ws/global");
+const token = localStorage.getItem("iot_token");
+const ws = new WebSocket(
+  "ws://localhost:8000/api/ws/global",
+  ["iot-jwt", token],
+);
 ws.onmessage = (e) => {
   const data = JSON.parse(e.data);
   console.log("Device:", data.device_id, "Temp:", data.temperature);
@@ -94,6 +102,11 @@ ws.onmessage = (e) => {
 - Server chỉ broadcast dữ liệu; client không cần gửi gì.
 - Kết nối sẽ maintain mở cho tới khi client close hoặc connection break.
 - Dữ liệu từ MQTT Subscriber qua RealtimeHub broadcast.
+- `/ws/global` và `/ws/devices/{device_id}` bắt buộc xác thực user. Trình duyệt gửi
+  `Sec-WebSocket-Protocol: iot-jwt, <jwt>`; backend chỉ echo `iot-jwt`.
+- Client không phải trình duyệt có thể dùng `Authorization: Bearer <jwt>`.
+- Không truyền JWT bằng `?access_token=...`; backend từ chối query credential để
+  tránh secret xuất hiện trong URL/access log.
 
 ### WS `/ws/devices/{device_id}`
 
@@ -111,20 +124,22 @@ ws.onmessage = (e) => {
 
 **Mục đích**: **Bi-directional** kết nối từ thiết bị ESP32/IoT device.
 
+**Xác thực**:
+
+- Dùng `Sec-WebSocket-Protocol: iot-device, <device-password>` hoặc header
+  `x-device-password: <device-password>`.
+- Không truyền mật khẩu bằng `?device_password=...`; backend từ chối query credential.
+
 **Uplink (device → server)**:
 
 ```json
 {
   "device_id": "101",
-  "sensor_type": "temperature",
   "temperature": 28.5,
+  "humidity": 65,
   "timestamp_ms": 1714000012345
 }
 ```
-
-> Layout đầy đủ (các loại cảm biến, alias trường, bộ mã `sensor_type`, định dạng binary/protobuf)
-> xem **[esp32-payload-spec.md](./esp32-payload-spec.md)**. Lưu ý: backend hiện KHÔNG xử lý
-> trường `humidity` — chỉ `temperature`, `vibration`, `voltage`/`current`, `x`/`y`/`location`.
 
 Server sẽ echo lại: `{"ok": true, "received": {...}}`.
 
@@ -140,6 +155,8 @@ Server có thể gửi command qua REST API; framework support sẵn via `hub.se
 
 ```cpp
 void setup() {
+  // Cấu hình header x-device-password hoặc subprotocol iot-device theo thư viện
+  // WebSocket đang dùng trước khi gọi begin().
   webSocket.begin("server", 8000, "/api/ws/esp32/101");
 }
 
@@ -147,7 +164,7 @@ void loop() {
   webSocket.loop();
 
   // Send JSON telemetry
-  String payload = "{\"sensor_type\": \"temperature\", \"temperature\": 28.5}";
+  String payload = "{\"temperature\": 28.5, \"humidity\": 65}";
   webSocket.sendTXT(payload);
   delay(5000);
 }
@@ -218,10 +235,114 @@ void loop() {
 
 ### GET `/locations`
 
-- Trả về danh sách các tên location có sẵn (được quét từ thư mục floorplans SVG trên server).
+- Trả về danh sách location active mà user hiện tại có quyền xem, đọc từ MySQL.
 - Định dạng response: `{ "data": ["zone-1", "warehouse-a", ...] }`.
 
-## 7. Nhóm Health/MQTT
+### GET `/floorplans/{location}.webp`
+
+- Compatibility API legacy trả BLOB ảnh active theo location sau khi kiểm tra quyền nhóm.
+- Dù path giữ hậu tố `.webp` để tương thích, `Content-Type` phản ánh định dạng thật
+  đã lưu: `image/webp`, `image/png` hoặc `image/jpeg`.
+- Trả `404` khi location không tồn tại hoặc user không có quyền.
+- Header bảo mật: `X-Content-Type-Options: nosniff`,
+  `Cache-Control: private, no-store`.
+
+## 7. Nhóm Map Groups và lời mời
+
+Tất cả endpoint trong nhóm này yêu cầu JWT Bearer.
+
+### GET `/map-groups`
+
+- Admin nhận mọi group.
+- User active chỉ nhận group mình sở hữu hoặc có membership `accepted`.
+- Group có owner inactive/hết hạn bị ẩn với non-admin.
+- Response có `access_role` (`admin/owner/member`) và `can_manage`.
+
+### POST `/map-groups`
+
+- User tạo group cho chính mình với body `{ "name": "Factory A" }`.
+- Admin có thể thêm `owner_username`; username phải khớp chính xác.
+- Tên được trim, dài tối đa 100 và duy nhất không phân biệt hoa/thường theo owner.
+- Trả `409` khi trùng tên, `404` khi không tìm thấy owner.
+
+### PATCH `/map-groups/{group_id}`
+
+- Owner active hoặc admin đổi tên bằng `{ "name": "Factory B" }`.
+- Group ngoài quyền trả `404` để hạn chế IDOR.
+
+### DELETE `/map-groups/{group_id}`
+
+- Owner active hoặc admin xóa group sau bước xác nhận.
+- Backend khóa group và các map active, archive từng map với lý do `group_deleted`,
+  dọn membership/invitation rồi hard-delete group trong cùng transaction.
+- Trả `409` nếu archive/cascade không thể hoàn tất; toàn bộ transaction được rollback.
+
+### GET `/map-groups/{group_id}/members`
+
+- Owner/admin xem toàn bộ membership với trạng thái `pending/accepted/rejected`.
+
+### POST `/map-groups/{group_id}/invitations`
+
+- Owner/admin mời bằng `{ "username": "MemberExact" }`.
+- Username phải khớp chính xác; chặn self-invite, duplicate và tài khoản inactive.
+- Lời mời đã reject có thể được mời lại và trở về `pending`.
+- Giới hạn 100 request/giờ theo JWT user.
+
+### DELETE `/map-groups/{group_id}/members/{user_id}`
+
+- Owner/admin hủy lời mời pending hoặc gỡ membership accepted/rejected.
+- Member không có endpoint tự rời nhóm.
+
+### GET `/map-group-invitations`
+
+- Trả lời mời `pending` của chính user đang đăng nhập.
+
+### PATCH `/map-group-invitations/{group_id}`
+
+- Body `{ "status": "accepted" }` hoặc `{ "status": "rejected" }`.
+- Chỉ user được mời mới phản hồi được; phản hồi lặp lại trả `409`.
+- Accept bị chặn nếu owner của group không còn active.
+
+## 8. Nhóm Maps và archive
+
+Tất cả endpoint yêu cầu JWT Bearer.
+
+### GET `/map-groups/{group_id}/maps`
+
+- Admin, owner và accepted member xem metadata map active của nhóm.
+- Response không chứa `image_data`; dùng `image_url` để tải đúng BLOB đang chọn.
+- Group không tồn tại hoặc ngoài quyền trả `404`.
+
+### POST `/map-groups/{group_id}/maps`
+
+- Owner/admin gửi multipart gồm `location` và `file`.
+- File phải là ảnh tĩnh WebP, PNG hoặc JPG/JPEG; đuôi file, MIME và nội dung giải
+  mã thực tế phải khớp nhau.
+- Không giới hạn width/height theo nghiệp vụ; file phải có dung lượng từ 1 byte
+  và **nhỏ hơn 10 MiB**.
+- Location được trim, tối đa 255 ký tự và duy nhất không phân biệt hoa/thường.
+- Lỗi: `409` trùng location, `413` quá dung lượng, `415` sai loại file,
+  `422` sai nội dung/định dạng thực tế/ảnh động, `429` vượt 30 upload/giờ/user.
+
+### GET `/maps/{map_id}/image`
+
+- Kiểm tra quyền nhóm cho từng request rồi trả BLOB với `Content-Type` đã được
+  backend xác thực (`image/webp`, `image/png` hoặc `image/jpeg`).
+- Trả `404` khi map không tồn tại, đã archive hoặc user không có quyền.
+- Dùng `nosniff` và cache `private, no-store`.
+
+### DELETE `/maps/{map_id}`
+
+- Owner nhóm/admin archive map bằng transaction copy-before-delete.
+- Accepted member hoặc lookup ngoài quyền nhận `404`.
+- Sau archive, location có thể upload lại và nhận ID mới.
+
+### GET `/admin/deleted-maps?limit=50&offset=0`
+
+- Chỉ admin; trả metadata archive có phân trang, tuyệt đối không trả BLOB.
+- `limit` từ 1–100, `offset >= 0`; không có restore, preview hoặc purge.
+
+## 9. Nhóm Health/MQTT
 
 ### GET `/health`
 
@@ -270,9 +391,10 @@ void loop() {
 
 - `ws://<host>/ws/global`: luồng realtime cho Global Dashboard.
 - `ws://<host>/ws/devices/{device_id}`: luồng realtime cho trang Device Detail.
+- Hai endpoint frontend dùng subprotocol `["iot-jwt", token]`; URL không chứa token.
 - Payload realtime chuẩn hóa gồm: `device_id`, `sensor_type`, `temperature`, `vibration`, `voltage`, `current`, `ts`, `ts_iso`.
 
-## 7. Ma trận mã lỗi
+## 9. Ma trận mã lỗi
 
 - `200`: Thành công.
 - `201`: Tạo mới thành công.
@@ -282,9 +404,10 @@ void loop() {
 - `403`: Không có quyền.
 - `404`: Không tìm thấy.
 - `409`: Dữ liệu trùng/đã tồn tại.
+- `429`: Vượt giới hạn request.
 - `503`: Dịch vụ phụ thuộc chưa sẵn sàng.
 
-## 8. UI admin quản lý topic
+## 10. UI admin quản lý topic
 
 - Đường dẫn frontend: `/topic-management` (admin only).
 - Chức năng:

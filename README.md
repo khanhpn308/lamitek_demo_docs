@@ -10,6 +10,11 @@ Tài liệu được chuẩn hóa theo 3 nhóm định dạng:
 
 - `docs/srs/IEEE-SRS.md`: Đặc tả yêu cầu phần mềm (chuẩn IEEE).
 - `docs/architecture/system-architecture.md`: Tài liệu kiến trúc hệ thống.
+- `docs/architecture/map-webp-phase1.md`: Tài liệu triển khai nền tảng Map WebP Phase 1.
+- `docs/architecture/map-webp-phase2.md`: Tài liệu Group CRUD, invitation/membership và dialog quản lý nhóm Phase 2.
+- `docs/architecture/map-webp-phase3.md`: Tài liệu upload, chọn/hiển thị và archive Map WebP Phase 3.
+- `docs/architecture/map-webp-phase4.md`: Tài liệu cascade group/account, owner visibility và seed Map WebP Phase 4.
+- `docs/architecture/map-webp-phase5.md`: Tài liệu regression, security hardening và kiểm thử end-to-end Phase 5.
 - `docs/design/ui-ux-design.md`: Tài liệu UI/UX.
 - `docs/design/frontend-design-tokens.md`: Chuẩn typography và color token cho frontend.
 - `docs/deployment/docker-linux-deployment.md`: Hướng dẫn deploy Docker trên Linux cho `app_service` và `database_service`.
@@ -18,8 +23,7 @@ Tài liệu được chuẩn hóa theo 3 nhóm định dạng:
 - `docs/deployment/mysql-linux-operations.md`: Vào MySQL trên Linux (root/user Docker), lọc dữ liệu, cập nhật và sao lưu an toàn.
 - `docs/api/openapi-like.yaml`: Đặc tả API theo kiểu OpenAPI.
 - `docs/api/api-documentation.md`: Diễn giải API cho đội phát triển và kiểm thử.
-- `docs/api/esp32-payload-spec.md`: Đặc tả layout dữ liệu ESP32 → server (MQTT telemetry): topic, bộ mã cảm biến, JSON/binary/protobuf, schema thống nhất.
-- `docs/app_service-functions.md`: Bản đồ index function/component (file + dòng) — **tự sinh** bằng `app_service/scripts/gen_functions_doc.py`, KHÔNG sửa tay.
+- `docs/app_service-functions.md`: Danh sách function trong source `app_service/backend/app` và `app_service/src`.
 - `docs/changelogs.md`: Nhật ký thay đổi tính năng / API liên quan tài liệu.
 - `docs/guidelines/frontend-guidelines.md`: Quy định kiến trúc và coding guideline cho Frontend.
 - `docs/guidelines/backend-guidelines.md`: Quy định kiến trúc và coding guideline cho Backend.
@@ -27,6 +31,9 @@ Tài liệu được chuẩn hóa theo 3 nhóm định dạng:
 - `docs/adr/ADR-0001-kien-truc-tong-the.md`: ADR kiến trúc tổng thể.
 - `docs/adr/ADR-0002-chien-luoc-xac-thuc-phan-quyen.md`: ADR xác thực và phân quyền.
 - `docs/adr/ADR-0003-chien-luoc-du-lieu-thiet-bi-realtime.md`: ADR dữ liệu realtime.
+- `docs/adr/ADR-0004-luu-tru-map-webp-va-archive.md`: ADR lưu trữ Map WebP và archive trong MySQL.
+- `docs/adr/ADR-0005-xac-thuc-websocket-khong-dung-query.md`: ADR xác thực WebSocket không truyền credential trong URL.
+- `docs/adr/ADR-0006-hop-dong-upload-anh-ban-do.md`: ADR định dạng, kích thước và dung lượng upload ảnh bản đồ.
 
 ## Nguyên tắc cập nhật
 

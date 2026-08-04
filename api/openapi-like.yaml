@@ -13,10 +13,325 @@ tags:
   - name: users
   - name: devices
   - name: authorizations
+  - name: map-groups
+  - name: maps
   - name: health
   - name: mqtt
+  - name: test
   - name: websocket
 paths:
+  /api/map-groups:
+    get:
+      tags: [map-groups]
+      summary: Danh sách nhóm bản đồ có thể truy cập
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Admin nhận mọi nhóm; user nhận nhóm sở hữu hoặc đã accept
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MapGroupPublic"
+        "403":
+          description: Tài khoản user không còn hiệu lực
+    post:
+      tags: [map-groups]
+      summary: Tạo nhóm bản đồ
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MapGroupCreate"
+      responses:
+        "201":
+          description: Tạo thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapGroupPublic"
+        "404":
+          description: Không tìm thấy owner_username chính xác
+        "409":
+          description: Tên nhóm đã tồn tại theo owner
+
+  /api/map-groups/{group_id}:
+    parameters:
+      - $ref: "#/components/parameters/MapGroupId"
+    patch:
+      tags: [map-groups]
+      summary: Đổi tên nhóm (owner/admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MapGroupPatch"
+      responses:
+        "200":
+          description: Đổi tên thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapGroupPublic"
+        "404":
+          description: Không tìm thấy hoặc không có quyền quản lý
+        "409":
+          description: Tên nhóm đã tồn tại theo owner
+    delete:
+      tags: [map-groups]
+      summary: Archive map active và xóa nhóm (owner/admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Đã archive map, dọn membership và xóa nhóm trong một transaction
+        "404":
+          description: Không tìm thấy hoặc không có quyền quản lý
+        "409":
+          description: Archive/cascade thất bại; transaction đã rollback
+
+  /api/map-groups/{group_id}/members:
+    get:
+      tags: [map-groups]
+      summary: Danh sách membership/lời mời của nhóm
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/MapGroupId"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MapGroupMembershipPublic"
+        "404":
+          description: Không tìm thấy hoặc không có quyền quản lý
+
+  /api/map-groups/{group_id}/invitations:
+    post:
+      tags: [map-groups]
+      summary: Mời user vào nhóm (owner/admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/MapGroupId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MapGroupInvitationCreate"
+      responses:
+        "201":
+          description: Tạo hoặc mở lại lời mời thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapGroupMembershipPublic"
+        "404":
+          description: Không tìm thấy group/user hoặc không có quyền
+        "409":
+          description: Self-invite, duplicate hoặc user inactive
+        "429":
+          description: Vượt 100 lời mời/giờ/JWT user
+
+  /api/map-groups/{group_id}/members/{user_id}:
+    delete:
+      tags: [map-groups]
+      summary: Hủy pending hoặc gỡ membership (owner/admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/MapGroupId"
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Xóa membership thành công
+        "404":
+          description: Không tìm thấy hoặc không có quyền quản lý
+
+  /api/map-group-invitations:
+    get:
+      tags: [map-groups]
+      summary: Lời mời pending của user hiện tại
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MapGroupInvitationPublic"
+        "403":
+          description: Tài khoản không còn hiệu lực
+
+  /api/map-group-invitations/{group_id}:
+    patch:
+      tags: [map-groups]
+      summary: Accept hoặc reject lời mời của user hiện tại
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/MapGroupId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MapGroupInvitationPatch"
+      responses:
+        "200":
+          description: Phản hồi thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapGroupInvitationPublic"
+        "404":
+          description: Không tìm thấy lời mời của user hiện tại
+        "409":
+          description: Đã phản hồi hoặc owner không còn active
+
+  /api/map-groups/{group_id}/maps:
+    parameters:
+      - $ref: "#/components/parameters/MapGroupId"
+    get:
+      tags: [maps]
+      summary: Danh sách metadata map active của nhóm
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Admin, owner hoặc accepted member xem được; không chứa BLOB
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MapPublic"
+        "404":
+          description: Không tìm thấy nhóm hoặc không có quyền xem
+    post:
+      tags: [maps]
+      summary: Upload ảnh WebP, PNG hoặc JPG vào nhóm (owner/admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [location, file]
+              properties:
+                location:
+                  type: string
+                  maxLength: 255
+                file:
+                  type: string
+                  format: binary
+                  description: Ảnh tĩnh WebP/PNG/JPEG, dung lượng từ 1 byte và nhỏ hơn 10 MiB
+      responses:
+        "201":
+          description: Upload thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapPublic"
+        "404":
+          description: Không tìm thấy nhóm hoặc không có quyền quản lý
+        "409":
+          description: Location active đã tồn tại, không phân biệt hoa/thường
+        "413":
+          description: File có dung lượng từ 10 MiB trở lên
+        "415":
+          description: Không phải WebP, PNG hoặc JPG/JPEG
+        "422":
+          description: Nội dung/định dạng thực tế không hợp lệ hoặc ảnh động
+        "429":
+          description: Vượt 30 upload/giờ/JWT user
+
+  /api/maps/{map_id}/image:
+    get:
+      tags: [maps]
+      summary: Tải BLOB ảnh của map đang active
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/MapId"
+      responses:
+        "200":
+          description: Ảnh với MIME đã xác thực, cache private/no-store và nosniff
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Map không tồn tại, đã archive hoặc không có quyền
+
+  /api/maps/{map_id}:
+    delete:
+      tags: [maps]
+      summary: Archive map active (owner/admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/MapId"
+      responses:
+        "204":
+          description: Archive thành công
+        "404":
+          description: Map không tồn tại hoặc không có quyền quản lý
+
+  /api/admin/deleted-maps:
+    get:
+      tags: [maps]
+      summary: Lịch sử metadata map đã archive (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Metadata phân trang, không chứa BLOB
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedMapPage"
+        "403":
+          description: Chỉ admin
+
   /api/health:
     get:
       tags: [health]
@@ -32,7 +347,43 @@ paths:
         "200":
           description: DB hoạt động bình thường
         "503":
-          description: DB không kết nối được
+      get:
+        tags: [test]
+        summary: Lấy danh sách log test
+        security:
+          - bearerAuth: []
+        parameters:
+          - in: query
+            name: limit
+            required: false
+            schema:
+              type: integer
+              minimum: 1
+              maximum: 1000
+              default: 100
+          - in: query
+            name: device_name
+            required: false
+            schema:
+              type: string
+              nullable: true
+          - in: query
+            name: protocol
+            required: false
+            schema:
+              type: string
+              nullable: true
+          - in: query
+            name: device_id
+            required: false
+            schema:
+              type: string
+              nullable: true
+        responses:
+          "200":
+            description: Thành công
+          "403":
+            description: Không có quyền admin
         "200":
           description: Tạo tài khoản thành công
           content:
@@ -163,7 +514,7 @@ paths:
           description: Không tìm thấy user
     delete:
       tags: [users]
-      summary: Xóa user (admin)
+      summary: Xóa user và cascade lifecycle map thuộc sở hữu (admin)
       security:
         - bearerAuth: []
       parameters:
@@ -174,11 +525,13 @@ paths:
             type: integer
       responses:
         "204":
-          description: Xóa thành công
+          description: Đã archive map thuộc sở hữu, dọn quan hệ và xóa user trong một transaction
         "400":
           description: Không thể xóa chính mình
         "404":
           description: Không tìm thấy user
+        "409":
+          description: Archive/cascade thất bại; transaction đã rollback
 
   /api/devices:
     get:
@@ -507,6 +860,91 @@ paths:
         "503":
           description: Influx service chưa được khởi tạo
 
+  /api/test/config:
+    get:
+      tags: [test]
+      summary: Lấy cấu hình test mode (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Thành công
+        "403":
+          description: Không có quyền admin
+    put:
+      tags: [test]
+      summary: Cập nhật cấu hình test mode (admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestConfigPayload"
+      responses:
+        "200":
+          description: Thành công
+        "403":
+          description: Không có quyền admin
+
+  /api/test/send:
+    post:
+      tags: [test]
+      summary: Gửi payload test MQTT dạng text (admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestSendPayload"
+      responses:
+        "200":
+          description: Thành công
+        "403":
+          description: Không có quyền admin
+
+  /api/test/logs:
+    get:
+      tags: [test]
+      summary: Lấy danh sách log test
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - in: query
+          name: device_name
+          required: false
+          schema:
+            type: string
+            nullable: true
+        - in: query
+          name: protocol
+          required: false
+          schema:
+            type: string
+            nullable: true
+        - in: query
+          name: device_id
+          required: false
+          schema:
+            type: string
+            nullable: true
+      responses:
+        "200":
+          description: Thành công
+        "403":
+          description: Không có quyền admin
+
 # WebSocket không thuộc OpenAPI 3 chuẩn cho FastAPI, nên không xuất hiện trong /openapi.json và Swagger UI.
 # Để vẫn có tài liệu trong file này, dùng extension key `x-websocket-paths` bên dưới.
 x-websocket-paths:
@@ -516,6 +954,11 @@ x-websocket-paths:
     description: |
       Server broadcast dữ liệu cảm biến realtime từ MQTT đã chuẩn hóa.
       Client chỉ cần mở kết nối và nhận frame JSON; không bắt buộc gửi dữ liệu lên.
+    authentication:
+      browserSubprotocols: [iot-jwt, "<jwt>"]
+      nonBrowserHeader: "Authorization: Bearer <jwt>"
+      negotiatedSubprotocol: iot-jwt
+      queryCredentialsAllowed: false
     serverToClientMessage:
       $ref: "#/components/schemas/RealtimeSensorMessage"
     test:
@@ -529,6 +972,11 @@ x-websocket-paths:
     summary: Stream realtime theo từng thiết bị
     description: |
       Chỉ phát dữ liệu có device_id tương ứng với path param.
+    authentication:
+      browserSubprotocols: [iot-jwt, "<jwt>"]
+      nonBrowserHeader: "Authorization: Bearer <jwt>"
+      negotiatedSubprotocol: iot-jwt
+      queryCredentialsAllowed: false
     pathParams:
       device_id:
         type: string
@@ -544,6 +992,11 @@ x-websocket-paths:
     description: |
       Device gửi telemetry dạng JSON hoặc binary frame.
       Server trả ack/pong/echo, đồng thời duy trì kết nối theo device_id.
+    authentication:
+      deviceSubprotocols: [iot-device, "<device-password>"]
+      deviceHeader: "x-device-password: <device-password>"
+      negotiatedSubprotocol: iot-device
+      queryCredentialsAllowed: false
     pathParams:
       device_id:
         type: string
@@ -572,7 +1025,190 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  parameters:
+    MapGroupId:
+      in: path
+      name: group_id
+      required: true
+      schema:
+        type: integer
+    MapId:
+      in: path
+      name: map_id
+      required: true
+      schema:
+        type: integer
   schemas:
+    MapGroupCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        owner_username:
+          type: string
+          maxLength: 45
+          nullable: true
+          description: Chỉ admin được tạo group cho owner khác; phải khớp chính xác
+    MapGroupPatch:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+    MapGroupPublic:
+      type: object
+      required:
+        - group_id
+        - name
+        - owner_user_id
+        - owner_username
+        - created_at
+        - updated_at
+        - access_role
+        - can_manage
+      properties:
+        group_id: { type: integer }
+        name: { type: string }
+        owner_user_id: { type: integer }
+        owner_username: { type: string }
+        created_by_user_id:
+          type: integer
+          nullable: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        access_role:
+          type: string
+          enum: [admin, owner, member]
+        can_manage: { type: boolean }
+    MapGroupInvitationCreate:
+      type: object
+      required: [username]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 45
+          description: Phải khớp chính xác
+    MapGroupInvitationPatch:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [accepted, rejected]
+    MapGroupMembershipPublic:
+      type: object
+      required:
+        - group_id
+        - user_id
+        - username
+        - fullname
+        - status
+        - invited_at
+      properties:
+        group_id: { type: integer }
+        user_id: { type: integer }
+        username: { type: string }
+        fullname: { type: string }
+        status:
+          type: string
+          enum: [pending, accepted, rejected]
+        invited_by_user_id:
+          type: integer
+          nullable: true
+        invited_at: { type: string, format: date-time }
+        responded_at:
+          type: string
+          format: date-time
+          nullable: true
+    MapGroupInvitationPublic:
+      type: object
+      required: [group_id, group_name, owner_username, status, invited_at]
+      properties:
+        group_id: { type: integer }
+        group_name: { type: string }
+        owner_username: { type: string }
+        status:
+          type: string
+          enum: [pending, accepted, rejected]
+        invited_at: { type: string, format: date-time }
+        responded_at:
+          type: string
+          format: date-time
+          nullable: true
+    MapPublic:
+      type: object
+      required:
+        - location_id
+        - location
+        - mime_type
+        - original_filename
+        - checksum_sha256
+        - file_size_bytes
+        - width
+        - height
+        - group_id
+        - owner_user_id
+        - created_at
+        - image_url
+      properties:
+        location_id: { type: integer }
+        location: { type: string }
+        mime_type: { type: string, enum: [image/webp, image/png, image/jpeg] }
+        original_filename: { type: string }
+        checksum_sha256: { type: string, minLength: 64, maxLength: 64 }
+        file_size_bytes:
+          type: integer
+          minimum: 1
+          maximum: 10485759
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        group_id: { type: integer }
+        owner_user_id: { type: integer }
+        created_by_user_id: { type: integer, nullable: true }
+        created_at: { type: string, format: date-time }
+        image_url: { type: string }
+    DeletedMapPublic:
+      type: object
+      description: Metadata archive; không bao gồm image_data
+      properties:
+        location_id: { type: integer }
+        location: { type: string }
+        mime_type: { type: string }
+        original_filename: { type: string }
+        checksum_sha256: { type: string }
+        file_size_bytes: { type: integer }
+        width: { type: integer }
+        height: { type: integer }
+        group_id_snapshot: { type: integer }
+        group_name_snapshot: { type: string }
+        owner_user_id_snapshot: { type: integer }
+        owner_username_snapshot: { type: string }
+        created_by_user_id_snapshot: { type: integer, nullable: true }
+        created_by_username_snapshot: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        deleted_by_user_id_snapshot: { type: integer }
+        deleted_by_username_snapshot: { type: string }
+        deleted_at: { type: string, format: date-time }
+        delete_reason:
+          type: string
+          enum: [map_deleted, group_deleted, owner_deleted]
+    DeletedMapPage:
+      type: object
+      required: [data, total, limit, offset]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeletedMapPublic"
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        offset: { type: integer, minimum: 0 }
     LoginRequest:
       type: object
       required: [username, password]
@@ -834,6 +1470,36 @@ components:
         publish_topic:
           type: string
           nullable: true
+    TestConfigPayload:
+      type: object
+      required: [enabled, protocol, gateway_id, node_id, device_id, message]
+      properties:
+        enabled:
+          type: boolean
+        protocol:
+          type: string
+          enum: [mqtt, websocket]
+        gateway_id:
+          type: string
+        node_id:
+          type: string
+        device_id:
+          type: string
+        message:
+          type: string
+    TestSendPayload:
+      type: object
+      required: [protocol, gateway_id, node_id, message]
+      properties:
+        protocol:
+          type: string
+          enum: [mqtt]
+        gateway_id:
+          type: string
+        node_id:
+          type: string
+        message:
+          type: string
     AuthorizationCreate:
       type: object
       required: [device_id, user_id]

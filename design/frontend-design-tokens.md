@@ -1,15 +1,9 @@
 # Tiêu Chuẩn Design Token Frontend
 
 - Mã tài liệu: FE-DESIGN-001
-- Phiên bản: 2.0.0
-- Ngày cập nhật: 2026-06-25
+- Phiên bản: 1.0.0
+- Ngày cập nhật: 2026-04-05
 - Phạm vi: Frontend trong `app_service`
-
-> **Thay đổi quan trọng (v2.0.0):** Ứng dụng chạy **dark theme cố định** với palette
-> slate/blue. Token mặc định sinh từ `generated/webflow.css` (card `#191919`, primary
-> `#1a1b1f`/`#84868b`, background `#f5f7fa`) **KHÔNG khớp** theme thực tế, nên `global.css`
-> **override toàn bộ** token màu ở `:root` (xem mục 4). Khi đọc giá trị token đang chạy,
-> lấy theo bảng "Token override đang áp dụng" — KHÔNG phải bảng token gốc của webflow.
 
 ## 1. Mục tiêu
 
@@ -46,50 +40,51 @@ Nguyên tắc:
 - Nút bấm/chức năng: dùng `font-button`.
 - Không sử dụng font ngoài danh sách phê duyệt nếu chưa có xác nhận của Design/Brand.
 
-## 4. Color token override đang áp dụng (nguồn: `global.css` `:root`)
+## 4. Color token (Light theme)
 
-Đây là **giá trị token thực tế đang chạy** trên toàn ứng dụng. Block override đặt ở cuối
-`app_service/src/styles/global.css` để thắng độ ưu tiên so với token gốc từ webflow.
+| Semantic token | Value |
+|---|---|
+| `--background` | `#f5f7fa` |
+| `--foreground` | `#ffffff` |
+| `--card` | `#ffffff` |
+| `--card-foreground` | `#060606` |
+| `--popover` | `#eae9e9` |
+| `--popover-foreground` | `#060606` |
+| `--primary` | `#1a1b1f` |
+| `--primary-foreground` | `#f8f8f9` |
+| `--secondary` | `#e9ecfb` |
+| `--secondary-foreground` | `#0d0d0f` |
+| `--muted` | `#f0f0f0` |
+| `--muted-foreground` | `#767273` |
+| `--accent` | `#dcdcdc` |
+| `--accent-foreground` | `#0d0d0d` |
+| `--destructive` | `#d74843` |
+| `--border` | `#e4ebf3` |
+| `--input` | `#e7eef6` |
+| `--ring` | `#1a1b1e` |
 
-| Semantic token | Value | Tham chiếu Tailwind |
-|---|---|---|
-| `--background` | `#0f172a` | slate-900 |
-| `--foreground` | `#f8fafc` | slate-50 |
-| `--card` | `#1e293b` | slate-800 |
-| `--card-foreground` | `#f8fafc` | slate-50 |
-| `--popover` | `#1e293b` | slate-800 |
-| `--popover-foreground` | `#f8fafc` | slate-50 |
-| `--primary` | `#2563eb` | blue-600 |
-| `--primary-foreground` | `#ffffff` | white |
-| `--secondary` | `#334155` | slate-700 |
-| `--secondary-foreground` | `#f8fafc` | slate-50 |
-| `--muted` | `#334155` | slate-700 |
-| `--muted-foreground` | `#94a3b8` | slate-400 |
-| `--accent` | `#1d4ed8` | blue-700 |
-| `--accent-foreground` | `#ffffff` | white |
-| `--destructive` | `#dc2626` | red-600 |
-| `--border` | `#334155` | slate-700 |
-| `--input` | `#334155` | slate-700 |
-| `--ring` | `#3b82f6` | blue-500 |
-| `--radius` | `0.75rem` | rounded-xl |
+## 5. Color token (Dark theme)
 
-### 4.1 Màu giữ nguyên (KHÔNG token hoá)
-
-Các màu sau mang ý nghĩa ngữ nghĩa, được giữ trực tiếp (không map vào token):
-
-- Trạng thái: online/success = `green-500`, offline/error = `red-500`, cảnh báo = `amber-*`.
-- Badge vai trò: admin = `purple-500/20`.
-- Màu chuỗi biểu đồ recharts (Current `#3b82f6`, Voltage `#a855f7`, Temperature `#ef4444`,
-  Vibration `#10b981`) — recharts cần giá trị hex cụ thể qua prop `fill`/`stroke`.
-- Gradient nền trang Login/ForgotPassword: `from-slate-900 via-slate-800 to-slate-900`.
-
-## 5. Token gốc từ webflow (tham chiếu — KHÔNG dùng trực tiếp)
-
-`generated/webflow.css` định nghĩa token light/dark theo design system gốc
-(vd dark: `--card #191919`, `--primary #84868b`; light: `--background #f5f7fa`).
-Các giá trị này **bị override** ở mục 4 nên không phản ánh giao diện thực tế. Chỉ tham chiếu
-khi đồng bộ lại với design system gốc. App hiện không bật class `.dark` — chạy dark theme
-cố định qua override `:root`.
+| Semantic token | Value |
+|---|---|
+| `--background` | `#060606` |
+| `--foreground` | `#f8f8f8` |
+| `--card` | `#191919` |
+| `--card-foreground` | `#f8f8f8` |
+| `--popover` | `#191919` |
+| `--popover-foreground` | `#f8f8f8` |
+| `--primary` | `#84868b` |
+| `--primary-foreground` | `#060606` |
+| `--secondary` | `#171a29` |
+| `--secondary-foreground` | `#f7f8fd` |
+| `--muted` | `#020202` |
+| `--muted-foreground` | `#8d8d8d` |
+| `--accent` | `#2e2e2e` |
+| `--accent-foreground` | `#f8f8f8` |
+| `--destructive` | `#dc4d48` |
+| `--border` | `#e4ebf31a` |
+| `--input` | `#ffffff26` |
+| `--ring` | `#97989c` |
 
 ## 6. Ánh xạ vào triển khai
 
