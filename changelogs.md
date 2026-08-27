@@ -1,5 +1,286 @@
 # Changelog (docs)
 
+## 2026-08-27
+
+- **JSON Ping — PING-17/P6 final verification complete**
+  - Xác minh migration 015 trên cả MySQL hiện có và database tạm sạch; schema, constraint và index
+    khớp contract, database thử nghiệm được drop sau kiểm tra.
+  - Full-stack Docker/MySQL smoke pass exact text/binary echo, forward gap, late recovery, live admin
+    UI và delete/reset; dữ liệu Gateway/Node tạm được dọn sạch và browser console có 0 issue.
+  - Smoke phát hiện Google Fonts bị production CSP chặn; đã bỏ external font links, chuyển sang system
+    font stack và thêm regression test cho Docker build context.
+  - **Verification**: backend `200 passed, 1 skipped`; frontend `92 passed` trên 25 files; Vite và
+    Docker production build pass; chi tiết tại `docs/testing/ping-feature-test-report.md`.
+
+## 2026-08-26
+
+- **JSON Ping — PING-16 contract/deployment documentation**
+  - Đồng bộ OpenAPI-like với strict text/binary Ping, redacted error, admin summary/delete và
+    `ping_stats_updated` WebSocket event.
+  - Bổ sung schema/index migration 015, quy trình backup/apply/verify và cảnh báo destructive rollback.
+  - Làm rõ URL ID xác thực Gateway khác Node ID trong payload; JSON ping bypass telemetry, Influx,
+    presence/`last_seen_at`. MQTT không đổi; WebSocket legacy `PING|` raw echo đã bị bỏ.
+
+- **JSON Ping — Phase P5 frontend admin complete**
+  - Thêm admin route/navigation `/ping`, catalog filter và đúng ba summary cards; current payload chỉ
+    hiển thị order cùng Node uptime milliseconds, không render raw payload.
+  - Admin WebSocket `/ws/pings` refresh đúng selected device, coalesce event burst, chặn stale response
+    và reconnect sau 1200 ms; destructive dialog hỗ trợ atomic clear và zero-state refetch.
+  - Mobile nav dùng horizontal scrolling có kiểm soát; non-admin bị chặn bởi `AdminRoute`.
+  - **Verification**: toàn frontend `91 passed`; production build pass; real-browser mocked-API smoke
+    pass desktop/mobile/admin/non-admin, không có console issue. Docker daemon tắt nên chưa chạy
+    full-stack browser smoke với MySQL thật.
+
+- **JSON Ping — Phase P4 backend complete**
+  - Thêm dedicated admin group và WebSocket `/api/ws/pings` + `/ws/pings`, xác thực JWT
+    subprotocol `iot-jwt` và từ chối non-admin bằng close `1008`.
+  - Ping commit/raw echo phát redacted `received`; delete commit phát `cleared` thread-safe từ
+    worker thread. Events không chứa payload/credential và không đi telemetry groups.
+  - RealtimeHub dọn failed socket, đóng/clear admin group khi stop; REST summary/delete, RBAC,
+    atomic rollback và realtime flow đã hoàn tất end-to-end.
+  - **Verification**: toàn nhóm ping `74 passed`; toàn backend `200 passed, 1 skipped`; MQTT
+    implementation không thay đổi.
+
+- **JSON Ping — PING-09 admin summary/delete REST APIs**
+  - Thêm admin-only `GET /api/pings/{device_id}/summary` với aggregate totals và current
+    payload theo database ID mới nhất.
+  - Thêm atomic `DELETE /api/pings/{device_id}`: khóa Device row, xóa missing trước payload,
+    trả exact deleted counts và reset inferred `predicted_order` về 1; zero state idempotent.
+  - Typed response schemas, RBAC `403`, unknown device `404` và rollback khi commit lỗi đều
+    được khóa bằng integration tests. Realtime event được giữ cho PING-10.
+  - **Verification**: Ping APIs `8 passed`; toàn nhóm ping `68 passed`; toàn backend
+    `194 passed, 1 skipped`.
+
+- **JSON Ping — Phase P3 WebSocket integration**
+  - Tích hợp text và binary UTF-8 JSON ping vào `/api/ws/esp32/{device_id}` với shared strict
+    validation/persistence path; raw frame chỉ được echo sau DB commit và giữ nguyên frame type.
+  - Ping hợp lệ/lỗi bypass ACK, presence, Influx/telemetry và không cập nhật `last_seen_at`;
+    lỗi trả `ping_error` redacted nhưng giữ WebSocket connection sống.
+  - Xóa WebSocket special-case `PING|`; MQTT legacy echo không thay đổi. Binary không phải
+    JSON ping tiếp tục dùng binary/protobuf pipeline hiện có.
+  - Bổ sung full validation/error integration matrix gồm UTF-8 size, ranges, strict types,
+    extra field, unknown device, malformed JSON và case-sensitive sensor type.
+  - **Verification**: schema + WebSocket `48 passed`; MQTT `2 passed, 1 skipped`; toàn backend
+    `186 passed, 1 skipped`.
+
+- **JSON Ping — Phase P2 strict validation và sequence persistence**
+  - Thêm Pydantic v2 `PingMessage` strict, required toàn bộ field, cấm extra, kiểm tra range,
+    device ID decimal dương và `size` theo UTF-8 byte length.
+  - Error formatter chỉ trả field/reason, không lặp raw payload hoặc input lớn.
+  - Thêm transaction service khóa Device row bằng `FOR UPDATE`, suy ra cycle/predicted order
+    hoàn toàn từ DB, bulk insert tối đa 10.000 missing và rollback gap 10.001.
+  - Duplicate/late order vẫn được lưu; late arrival xóa missing của current cycle; order 1
+    sau lịch sử mở cycle mới. Lỗi DB trả message ổn định và rollback partial rows.
+  - Phase này chưa nối service vào WebSocket và không thay đổi MQTT, telemetry, InfluxDB,
+    presence, REST hoặc frontend.
+  - **Verification**: schema `24 passed`; service `6 passed`; toàn backend
+    `162 passed, 1 skipped`.
+
+- **JSON Ping — PING-01 database foundation**
+  - Thêm ORM `PingPayload` và `MissingPingPayload`, đăng ký trước startup
+    `Base.metadata.create_all()` và giữ SQLite-compatible primary-key variant cho tests.
+  - Thêm hai bảng với FK cascade, CHECK constraints, unique missing order và các composite
+    index đã khóa trong `alltasks.md`.
+  - Thêm clean-install DDL, migration additive `015_ping_payload_tracking.sql` và rollback
+    chỉ xóa hai bảng mới theo thứ tự an toàn. `payload_id` là missing order, không phải FK.
+  - Thêm ADR-0008 và contract tests chống drift giữa ORM/migration/clean schema.
+  - PING-01 chưa thay đổi WebSocket, MQTT, telemetry, REST hoặc frontend.
+  - **Verification**: contract `6 passed`; backend `132 passed, 1 skipped`; SQLite metadata
+    creation pass. MySQL disposable dry-run chưa chạy vì máy hiện không có container/image
+    MySQL.
+
+## 2026-08-09
+
+- **Anchor MQTT — delta coalesce riêng theo từng Gateway**
+  - Mutation create/update/delete chỉ tạo event cho Anchor thay đổi; phần tử có
+    `action=upsert|delete`. PATCH no-op trả `unchanged` và không tăng revision.
+  - Dispatcher compose payload riêng từ `applied_revision` của từng Gateway, gộp theo
+    Anchor ID với action cuối thắng; retry dùng payload delivery bất biến.
+  - Full `replace` chỉ dùng cho bootstrap Gateway, resync có đích hoặc clear map. UI chuyển
+    nút resync vào từng Gateway; endpoint resync toàn location cũ trả `410 Gone`.
+  - Thêm `target_gateway_id` cho outbox và `payload` cho delivery qua migration additive
+    `014_anchor_delta_delivery.sql`; startup repair hỗ trợ volume MySQL hiện có.
+  - Chặn hai Gateway active dùng chung downlink topic; dữ liệu legacy trùng topic được đánh
+    dấu `misconfigured` để ACK không bị nhập nhằng.
+  - Sửa lỗi production `autoflush=False` khiến delivery đã ACK `applied` nhưng outbox cha
+    còn `pending`; ACK idempotent giờ cũng tự sửa aggregate cũ.
+  - **Verification**: backend `126 passed, 1 skipped`; frontend `79 passed` trên 23 test files;
+    Vite/Docker build pass; migration 014 đã backfill không còn payload null; retained baseline
+    revision 47 và ACK thực tế chuyển delivery/outbox sang `applied/completed`.
+
+- **Anchor MQTT — loại bỏ Hardware ID khỏi downlink**
+  - Mỗi phần tử trong `anchor_config.v1.anchors` chỉ còn `id`, `mac_address`, `name`, `x`, `y`, `z`;
+    không còn gửi field `hardware_id` trùng lặp xuống Gateway.
+  - Database và REST vẫn giữ `hardware_id` legacy để không phá dữ liệu/client cũ.
+  - Bổ sung regression test xác nhận snapshot MQTT không chứa `hardware_id`.
+  - **Verification**: backend `113 passed, 1 skipped`; Docker backend healthy; revision `r46`
+    đã thay thế payload cũ và retained MQTT tại `gateway/136024/backend_send` không còn `hardware_id`.
+
+- **Devices — hiển thị đúng loại Gateway**
+  - Bổ sung mapping `device_type='gateway' → Gateway` cho card danh sách và trang chi tiết.
+  - Gateway không còn rơi vào fallback Temperature hoặc sinh biểu đồ nhiệt độ trên trang chi tiết.
+  - Thêm regression test từ dữ liệu API thực tế; frontend `79 passed`, Vite build pass.
+
+- **Anchor editor — khôi phục tương phản nút Hủy**
+  - Khai báo rõ nền xám nhạt và chữ xám đậm cho secondary action, tránh bị CSS toàn
+    cục biến thành chữ trắng trên nền trắng.
+  - Bổ sung trạng thái hover, focus-visible và disabled; thêm regression test cho style.
+  - **Verification**: frontend `78 passed`; Vite production build pass.
+
+- **Anchor — chuyển định danh phần cứng sang MAC Address**
+  - Đổi UI tạo/sửa và danh sách quản lý từ **Hardware ID** sang **MAC Address**; input
+    nhận sáu octet hexadecimal, chuẩn hóa chữ thường thành chữ hoa và báo lỗi định dạng sai.
+  - REST, ORM, snapshot MQTT và search bổ sung `mac_address`; MAC trở thành bất biến sau
+    khi gán. Anchor legacy có ID số được phép gán MAC một lần qua editor.
+  - Thêm migration additive `013_anchor_mac_address.sql`: cột `VARCHAR(17)` nullable,
+    unique index và backfill có điều kiện; giữ `hardware_id` để rollout không phá dữ liệu cũ.
+  - Cập nhật clean schema, runtime migration, ERD tool, SRS và API/MQTT contract.
+  - **Verification**: backend `113 passed, 1 skipped`; frontend `77 passed`; Vite và
+    Docker backend/frontend build pass; MySQL existing volume và ERD Workbench đã xác minh.
+
+- **Anchor — chuẩn hóa tọa độ 2 chữ số thập phân**
+  - Thu gọn cụm input X/Y/Z còn nửa chiều rộng modal trên màn hình `sm` trở lên;
+    màn hình nhỏ vẫn dùng toàn bộ chiều rộng để nhập liệu thuận tiện.
+  - Input dùng bước `0.01`, không nhận chữ số thập phân thứ ba và chuẩn hóa dữ liệu cũ
+    khi mở editor.
+  - Marker có dữ liệu cũ và thao tác kéo trên map đều snap theo bước `0.01`; API làm
+    tròn half-up trước khi lưu DB và tạo payload Gateway, ví dụ `8.325 → 8.33`.
+  - **Verification**: backend `107 passed, 1 skipped`; frontend `74 passed` trên 22 test
+    files; Vite production build pass; Chrome smoke xác nhận layout, nhập liệu, kéo-thả
+    và console sạch.
+
+## 2026-08-08
+
+- **Đăng ký Gateway trực tiếp trên web**
+  - Thêm loại **Gateway** vào form **Add New Device**, hiển thị Device ID cùng topic uplink/downlink.
+  - Topic mặc định là `gateway/{device_id}/backend_receive` và
+    `gateway/{device_id}/backend_send`; admin vẫn có thể nhập topic riêng.
+  - Backend áp dụng cùng default contract kể cả client không gửi topic và subscribe uplink
+    ngay sau khi tạo, không cần restart để nhận ACK.
+  - **Verification**: backend `106 passed, 1 skipped`; frontend `73 passed` trên 22 test files;
+    Vite production build pass; Chrome smoke xác nhận topic/payload và console sạch.
+
+- **GPS Dashboard — bố cục full-bleed ba vùng**
+  - Chuyển dashboard submenu về hàng ngang và bỏ `max-width`, margin/card wrapper của route GPS.
+  - Tách thao tác Hệ thống sang sidebar trái 240px, map co giãn ở giữa và danh sách thiết bị
+    sang panel phải 300px; giữ nguyên luồng upload của nút **Thêm bản đồ**.
+  - Ảnh mặt bằng tự fit trọn vẹn theo cả chiều rộng và chiều cao vùng map bằng
+    `ResizeObserver`, giữ tỷ lệ và không cần thanh cuộn; bỏ nền lưới quanh map.
+  - Dưới 1024px, Hệ thống và Thiết bị dùng drawer với target thao tác tối thiểu 44px.
+  - Chưa triển khai tầng, database tầng, đa-map hoặc kéo-thả/sắp xếp map.
+
+- **Cấu hình Anchor — Phase 6: integration, security và rollout readiness**
+  - Thêm Gateway simulator và test Mosquitto thật cho retained QoS 1 cùng ACK applied/rejected.
+  - Xác minh migration `012` chạy lặp trên MySQL 8.4 disposable database; cập nhật ERD
+    và giữ backup `D:\iot\mysql\erd.before-phase5-20260808.mwb`.
+  - Chrome 375×800 phát hiện panel bị navbar chặn; đổi panel mobile thành fixed-centered
+    z-index 60 rồi smoke lại với console sạch và đúng một resync request.
+  - Vá package lock loại `nanoid` high/PostCSS moderate; Mosquitto bắt buộc password auth.
+  - Thêm runbook, test report và cập nhật OpenAPI-like/SRS/ADR/architecture/inventory.
+  - Hardening vòng review cuối: khóa trạng thái ACK terminal trước ACK mâu thuẫn đến trễ,
+    audit stale ACK, loại delivery khi Gateway rời location, claim song song bằng
+    `FOR UPDATE SKIP LOCKED` và không đưa ACK vào pipeline telemetry.
+  - **Verification**: backend `104 passed, 1 skipped` + MQTT opt-in `1 passed`;
+    frontend `65 passed`; Vite và Docker backend/frontend build pass; không còn high/critical.
+
+- **Cấu hình Anchor — Phase 5: lifecycle và Gateway reconciliation**
+  - Map/group/user deletion soft-delete Anchor và tạo empty snapshot trong cùng transaction
+    trước khi archive active map.
+  - Chuyển `anchor.location_id` thành snapshot ID, thêm migration `012` và startup repair
+    để inactive Anchor audit không bị FK chặn hoặc cascade mất khi map bị archive.
+  - Device admin create/patch/topic/delete reconcile revision mới nhất; thay publish topic
+    tự enqueue lại, inactive/chuyển location loại khỏi aggregate cũ.
+  - Dispatcher định kỳ reconcile cả snapshot đã completed để Gateway thêm sau vẫn nhận latest.
+  - **Verification**: full backend `104 passed`.
+
+- **Cấu hình Anchor — Phase 4: MQTT delivery, liveness, ACK và sync UI**
+  - Thêm dispatcher transactional outbox với lease, retry, restart recovery và publish
+    MQTT QoS 1 retained một lần cho mỗi revision/topic.
+  - Reconcile Gateway active theo location; Gateway thiếu publish topic xuất hiện
+    `misconfigured` và broker offline không làm mất delivery.
+  - Theo dõi liveness từ MQTT/WS đã xác thực, throttle ghi `last_seen_at` 5 giây và
+    tính online bằng server time với timeout mặc định 30 giây.
+  - Nhận ACK MQTT/WS, validate schema/gateway/topic/location/revision, cập nhật idempotent;
+    thêm status/resync API và aggregate `synced|partial|pending|error|no_gateway`.
+  - GPS toolbar có badge, chi tiết từng Gateway, polling 5 giây và nút gửi lại cấu hình;
+    member chỉ-view không gọi endpoint quản trị.
+  - **Verification**: backend `101 passed`; frontend Phase 4 và toàn bộ GPS regression
+    tests pass.
+
+## 2026-08-07
+
+- **Cấu hình Anchor — Phase 3: danh sách quản lý và bulk invitations**
+  - Thêm dialog quản lý Anchor với search debounce 300 ms, filter group/map, page size
+    25 và đầy đủ DB ID/hardware/group/map/x/y/z/updated time.
+  - Row trong danh sách chuyển đúng group/map, chờ ảnh và Anchor fresh trước khi mở
+    editor; hủy an toàn nếu resource hoặc quyền thay đổi giữa lúc tải.
+  - Thêm bulk invitation tối đa 50 username, trim/dedupe xử lý, exact-case lookup,
+    partial success và mã kết quả từng user; UI nhận multiline/comma input.
+  - **Verification**:
+    - Backend `94 passed`; frontend `62 passed` trên 18 test files; Vite build pass.
+    - Chrome smoke test xác nhận debounce/search, list-to-map editor, PATCH/bulk payload,
+      partial result, dialog 375 px và console sạch.
+    - `npm audit --omit=dev`: không có critical/high; còn 3 moderate hiện hữu từ
+      React Router/PostCSS, không thay dependency ngoài phạm vi Phase 3.
+
+- **Cấu hình Anchor — Phase 2: CRUD và editor trên map**
+  - Thêm REST list/create/get/patch/soft-delete và management search có filter/pagination,
+    với policy viewer/member và mutation admin hoặc owner có cờ `yes`.
+  - Mỗi mutation tạo một full snapshot `anchor_config.v1` theo Anchor active, cùng
+    transaction với dữ liệu nghiệp vụ; revision mới supersede delivery cũ chưa applied.
+  - GPS Dashboard tải/cancel Anchor theo map, render marker riêng và giữ nguyên marker
+    thiết bị realtime; viewer marker không tương tác.
+  - Thêm editor tạo/sửa/xóa, draft `(50,50,0)`, numeric input, kéo-thả có clamp và
+    xử lý thu hồi quyền 403 bằng refresh session + ẩn control.
+  - **Verification**:
+    - Backend `91 passed`; frontend `55 passed` trên 16 test files; Vite build pass.
+    - Chrome smoke test xác nhận marker, draft mặc định, đúng một POST khi Save, marker
+      mới và console/page error sạch.
+
+- **Cấu hình Anchor — Phase 1: phân quyền end-to-end**
+  - Mở rộng contract register/user/login/me với `can_config_anchor=yes|no`, mặc định
+    `no`; cờ không được đưa vào JWT.
+  - Thêm endpoint admin-only `PATCH /api/users/{user_id}/anchor-permission` và helper
+    quyền: admin bypass; user thường cần active, chưa hết hạn, là owner và có cờ `yes`.
+  - Trang quản lý user có switch khi tạo user và trên card user thường; admin hiển thị
+    quyền cố định. Request lỗi rollback switch và hiển thị alert.
+  - Bổ sung semantics dialog/switch và accessible name; cập nhật profile JSDoc trong
+    `AuthContext`.
+  - **Verification**:
+    - Backend `85 passed`; frontend `44 passed` trên 13 test files; Vite build pass.
+    - Chrome smoke test xác nhận switch mặc định tắt, admin copy, PATCH payload,
+      accessibility tree và console sạch.
+    - `npm audit --omit=dev`: không có critical/high; còn 3 moderate hiện hữu từ
+      React Router/PostCSS, chưa thay dependency ngoài phạm vi Phase 1.
+
+- **Cấu hình Anchor — Phase 0: baseline, schema và runtime foundation**
+  - Đồng bộ clean-install schema với bốn bảng map và bổ sung migration map image
+    contract còn thiếu; giữ nguyên migration xóa test log hiện hữu.
+  - Thêm migration `011_anchor_configuration.sql` cùng các bảng `anchor`,
+    `anchor_config_outbox`, `anchor_config_delivery`, cột `user.can_config_anchor`
+    mặc định `no` và `device.last_seen_at`.
+  - Thêm ORM tương ứng, startup patch idempotent cho existing MySQL volume và settings
+    liveness/dispatcher/retry; chưa khởi chạy dispatcher và chưa mở API/UI Anchor.
+  - Cập nhật `D:\iot\mysql\erd.mwb` bằng MySQL Workbench 8.0.47, loại
+    `anchor_group_member`; giữ backup timestamp độc lập với `.bak` của user.
+  - **Verification**:
+    - Backend `81 passed`; frontend `41 passed` trên 12 test files; Vite build pass.
+    - Clean schema và migration `011` đều chạy thành công hai lần liên tiếp trên MySQL 8.4.
+    - ERD mở lại và forward-engineer đúng contract cho ba bảng Anchor chính.
+
+- **Đặc tả và kế hoạch feature cấu hình Anchor (ghi nhận trước triển khai)**
+  - Chốt ma trận quyền: admin luôn cấu hình được; user thường cần
+    `can_config_anchor = 'yes'` đồng thời là owner group; accepted member chỉ xem.
+  - Chốt UX tạo/sửa/kéo/xóa Anchor, tọa độ phần trăm `(x, y, z)`, danh sách tìm kiếm
+    phân trang và lời mời nhiều thành viên.
+  - Chốt cơ chế đồng bộ Gateway bằng full snapshot versioned, MQTT QoS 1 retained,
+    transactional outbox, retry/supersede, ACK và liveness.
+  - Ghi toàn bộ phase/task/dependency/DoD vào `alltasks.md`.
+  - Thêm SRS riêng `srs/anchor-configuration-spec.md`, hợp đồng REST/MQTT
+    `api/anchor-configuration-api.md` và ADR-0007; cập nhật SRS tổng, kiến trúc và mục lục docs.
+  - Riêng mục lập kế hoạch này không thay đổi runtime/database; phần Phase 0 ở trên là
+    implementation foundation được thực hiện sau khi spec được chốt.
+
 ## 2026-08-02
 
 - **Cải thiện nhận diện thiết bị trên GPS Dashboard**

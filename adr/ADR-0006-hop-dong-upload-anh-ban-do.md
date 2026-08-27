@@ -2,7 +2,7 @@
 
 - **Trạng thái**: Accepted
 - **Ngày**: 2026-07-27
-- **Người quyết định**: Nhóm phát triển IoT Management
+- **Người quyết định**: Phạm Ngọc Khánh
 - **Thay thế**: Phần định dạng, kích thước và dung lượng trong ADR-0004
 
 ## Bối cảnh

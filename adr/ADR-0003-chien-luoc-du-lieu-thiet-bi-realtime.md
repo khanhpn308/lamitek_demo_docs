@@ -2,7 +2,7 @@
 
 - **Trạng thái**: Draff (giai đoạn hiện tại)
 - **Ngày**: 2026-04-04
-- **Người quyết định**: 
+- **Người quyết định**: Phạm Ngọc Khánh
 
 ## Bối cảnh
 

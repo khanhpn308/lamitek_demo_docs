@@ -9,6 +9,7 @@ Tài liệu được chuẩn hóa theo 3 nhóm định dạng:
 ## Cấu trúc tài liệu
 
 - `docs/srs/IEEE-SRS.md`: Đặc tả yêu cầu phần mềm (chuẩn IEEE).
+- `docs/srs/anchor-configuration-spec.md`: Đặc tả nghiệp vụ, permission, UI và đồng bộ gateway cho feature Anchor.
 - `docs/architecture/system-architecture.md`: Tài liệu kiến trúc hệ thống.
 - `docs/architecture/map-webp-phase1.md`: Tài liệu triển khai nền tảng Map WebP Phase 1.
 - `docs/architecture/map-webp-phase2.md`: Tài liệu Group CRUD, invitation/membership và dialog quản lý nhóm Phase 2.
@@ -17,12 +18,17 @@ Tài liệu được chuẩn hóa theo 3 nhóm định dạng:
 - `docs/architecture/map-webp-phase5.md`: Tài liệu regression, security hardening và kiểm thử end-to-end Phase 5.
 - `docs/design/ui-ux-design.md`: Tài liệu UI/UX.
 - `docs/design/frontend-design-tokens.md`: Chuẩn typography và color token cho frontend.
+- `docs/design/gps-dashboard-layout.md`: Bố cục ba vùng, responsive drawer và nguyên tắc thị giác của GPS Dashboard.
 - `docs/deployment/docker-linux-deployment.md`: Hướng dẫn deploy Docker trên Linux cho `app_service` và `database_service`.
 - `docs/deployment/https-setup.md`: Hướng dẫn bật HTTPS (Let’s Encrypt, Nginx trong Docker, CORS, gia hạn chứng chỉ).
 - `docs/deployment/docker-linux-tutorial.md`: Hướng dẫn thao tác Docker/Compose trên Linux (build, up/down, log, dọn dẹp).
 - `docs/deployment/mysql-linux-operations.md`: Vào MySQL trên Linux (root/user Docker), lọc dữ liệu, cập nhật và sao lưu an toàn.
+- `docs/deployment/anchor-configuration-runbook.md`: Rollout, chẩn đoán và rollback cấu hình Anchor.
+- `docs/testing/anchor-phase6-test-report.md`: Kết quả test/build/migration/MQTT/browser của feature Anchor.
+- `docs/testing/ping-feature-test-report.md`: Kết quả test/build, migration MySQL và full-stack smoke của feature JSON Ping.
 - `docs/api/openapi-like.yaml`: Đặc tả API theo kiểu OpenAPI.
 - `docs/api/api-documentation.md`: Diễn giải API cho đội phát triển và kiểm thử.
+- `docs/api/anchor-configuration-api.md`: Hợp đồng REST, MQTT delta/replace và ACK cho cấu hình Anchor.
 - `docs/app_service-functions.md`: Danh sách function trong source `app_service/backend/app` và `app_service/src`.
 - `docs/changelogs.md`: Nhật ký thay đổi tính năng / API liên quan tài liệu.
 - `docs/guidelines/frontend-guidelines.md`: Quy định kiến trúc và coding guideline cho Frontend.
@@ -34,6 +40,8 @@ Tài liệu được chuẩn hóa theo 3 nhóm định dạng:
 - `docs/adr/ADR-0004-luu-tru-map-webp-va-archive.md`: ADR lưu trữ Map WebP và archive trong MySQL.
 - `docs/adr/ADR-0005-xac-thuc-websocket-khong-dung-query.md`: ADR xác thực WebSocket không truyền credential trong URL.
 - `docs/adr/ADR-0006-hop-dong-upload-anh-ban-do.md`: ADR định dạng, kích thước và dung lượng upload ảnh bản đồ.
+- `docs/adr/ADR-0007-phan-quyen-va-dong-bo-cau-hinh-anchor.md`: ADR dùng chung map group và transactional outbox/ACK cho Anchor.
+- `docs/adr/ADR-0008-luu-tru-ping-va-missing-order.md`: ADR schema Ping, device cycle và missing order.
 
 ## Nguyên tắc cập nhật
 

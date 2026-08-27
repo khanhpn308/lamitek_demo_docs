@@ -9,6 +9,113 @@
 - Cap nhat cuc bo Phase 3 Map upload/display/archive: 2026-07-23 (chua quet lai so lieu tong)
 - Cap nhat cuc bo Phase 5 regression/security hardening: 2026-07-23 (chua quet lai so lieu tong)
 - Cap nhat cuc bo Phase 6 GPS device identity/clock: 2026-08-02 (chua quet lai so lieu tong)
+- Cap nhat cuc bo Anchor Phase 2 CRUD/map editor: 2026-08-07 (chua quet lai so lieu tong)
+- Cap nhat cuc bo Anchor Phase 3 management/bulk invite: 2026-08-07 (chua quet lai so lieu tong)
+- Cap nhat cuc bo Anchor Phase 4 MQTT/ACK/status UI: 2026-08-08 (chua quet lai so lieu tong)
+- Cap nhat cuc bo Anchor Phase 5 lifecycle/reconciliation: 2026-08-08 (chua quet lai so lieu tong)
+- Cap nhat cuc bo Anchor Phase 6 simulator/runbook/integration: 2026-08-08 (chua quet lai so lieu tong)
+- Cap nhat cuc bo GPS Dashboard three-zone responsive layout: 2026-08-08 (chua quet lai so lieu tong)
+- Cap nhat Anchor delta-per-Gateway: 2026-08-09 (chua quet lai so lieu tong)
+- Cap nhat cuc bo JSON Ping Phase P2: 2026-08-26 (chua quet lai so lieu tong)
+
+## JSON Ping Phase P2 - Validation va persistence service (bo sung)
+
+### `backend/app/schemas/pings.py`
+
+- `PingMessage`: strict Pydantic schema, canonical device ID va UTF-8 payload byte length.
+- `format_ping_validation_error`: tra mot field/reason on dinh, khong lap lai raw payload.
+
+### `backend/app/services/ping_service.py`
+
+- `persist_ping`: khoa Device row, suy ra cycle/predicted order, ghi ping/missing atomically.
+- `_max_cycle`, `_predicted_order`: doc state truc tiep tu database, khong dung cache in-memory.
+- `PingPersistenceResult`: metadata da commit cho WebSocket/event layer o phase sau.
+- `PingDeviceNotFoundError`, `PingGapTooLargeError`, `PingPersistenceError`: loi on dinh,
+  rollback sach va khong lo SQL/internal exception.
+
+## Anchor delta-per-Gateway (bo sung)
+
+- `create_anchor`, `update_anchor`, `delete_anchor`: ghi delta upsert/delete; no-op PATCH khong tao revision.
+- `resync_location`, `bootstrap_gateway`: tao full replace co `target_gateway_id`.
+- `_compose_gateway_payload`: coalesce event sau applied revision, last action wins theo Anchor ID.
+- `reconcile_latest_snapshot`: luu payload wire bat bien rieng vao moi delivery.
+- `gateway_publish_topic_in_use`: chan downlink topic trung; dispatcher danh dau legacy duplicate la misconfigured.
+- `AnchorSyncStatus`: resync tung Gateway; frontend khong con resync toan location.
+
+## GPS Dashboard - Three-zone responsive layout (bo sung)
+
+- `Layout`: dashboard submenu ngang; route GPS dung full-bleed main region.
+- `GPSPage`: viewport shell khong max-width/card margin cu.
+- `GPSDashboard`: system sidebar, map workspace/filter toolbar, device panel va mobile drawers.
+- `DevicePanelContent`: danh sach identity thiet bi dung chung cho desktop va drawer.
+- `MapViewer`: ResizeObserver fit tron map theo viewport, giu ty le va dung chung overlay toa do voi floorplan.
+
+## Anchor Phase 6 - Integration va van hanh (bo sung)
+
+- `AnchorGatewaySimulator`: nhan retained snapshot, apply/ignore revision va gui ACK.
+- MQTT integration test: retained flag, applied va rejected ACK tren Mosquitto that.
+- Runbook/test report: rollout, chan doan, rollback va verification evidence.
+
+## Anchor Phase 5 - Lifecycle va reconciliation (bo sung)
+
+- `archive_location_anchors`: soft-delete Anchor va tao empty snapshot truoc archive map.
+- `ensure_anchor_location_snapshot`: bo FK legacy de giu inactive Anchor audit.
+- `reconcile_gateway_change`: dong bo latest revision sau Device admin mutation.
+- `reconcile_pending_locations`: periodic target reconciliation cho Gateway them sau.
+
+## Anchor Phase 4 - MQTT delivery va sync status (bo sung)
+
+- `AnchorDispatcher`: reconcile target, lease delivery, publish QoS 1 retained va retry.
+- `GatewayPresence`: xac thuc liveness bang server time, throttle ghi `last_seen_at`.
+- `handle_gateway_uplink`/`apply_gateway_ack`: validate va cap nhat ACK idempotent.
+- Status/resync routes: aggregate/per-Gateway va tao full replace co dich.
+- `AnchorSyncStatus`: polling 5 giay, badge, chi tiet Gateway va manual resync tung Gateway.
+
+## Anchor Phase 3 - Management va bulk invitations (bo sung)
+
+### `backend/app/api/map_groups_routes.py`
+
+- `invite_group_members_bulk`: partial success, exact-case lookup, max 50 va rate limit.
+
+### `src/components/Dashboard/GPS/AnchorManagerDialog.jsx`
+
+- `AnchorManagerDialog`: debounce search, group/map filters, pagination va row selection.
+
+### `src/components/Dashboard/GPS/BulkInvitationForm.jsx`
+
+- `parseUsernames`, `BulkInvitationForm`: multiline/comma input va ket qua tung username.
+
+### `src/components/Dashboard/GPS/GPSDashboard.jsx`
+
+- `handleAnchorCatalogSelect`, `cancelAnchorNavigation`, `handleGroupSelection`,
+  `handleMapSelection`: dieu huong list-to-map va chan stale editor.
+
+### `src/lib/mapGroupsApi.js`
+
+- `inviteMapGroupMembersBulk`
+
+## Anchor Phase 2 - CRUD va map editor (bo sung)
+
+### `backend/app/api/anchors_routes.py`
+
+- `list_location_anchors`, `post_anchor`, `get_anchor`, `patch_anchor`, `remove_anchor`
+- `manage_anchors`, `_location_context`, `_active_anchor_context`, `_commit_mutation`
+
+### `backend/app/services/anchor_service.py`
+
+- `create_anchor`, `update_anchor`, `delete_anchor`, `resync_location`, `bootstrap_gateway`
+- `_assert_unique`, `_supersede_previous`, `_delta_event`, `_replace_event`, `_anchor_payload`
+
+### `src/lib/anchorsApi.js`
+
+- `listLocationAnchors`, `createAnchor`, `getAnchor`, `updateAnchor`, `deleteAnchor`
+- `manageAnchors`
+
+### `src/components/Dashboard/GPS`
+
+- `AnchorEditorDialog`: draft input, save, cancel va soft-delete confirmation.
+- `MapViewer.moveAnchor`: chuyen pointer sang x/y phan tram, dao truc Y va clamp.
+- `GPSDashboard`: load/cancel Anchor theo map, policy control va xu ly revoke 403.
 
 ## Phase 6 - GPS device identity va dashboard clock (bo sung)
 
@@ -132,6 +239,8 @@
 
 - list_devices_admin (line 36, python-def)
 - create_device (line 46, python-def)
+  - Với `device_type=gateway`, sinh topic nhận/gửi mặc định theo `device_id` và subscribe
+    uplink ngay trong MQTT runtime sau khi transaction thành công.
 - patch_device (line 72, python-def)
 - list_devices_for_current_user (line 93, python-def)
 - delete_device (line 111, python-def)
@@ -150,9 +259,10 @@
 
 ## app_service/backend/app/api/users_routes.py
 
-- list_users (line 28, python-def)
-- patch_user_status (line 52, python-def)
-- delete_user (line 70, python-def)
+- list_users (line 34, python-def)
+- patch_user_status (line 69, python-def)
+- patch_user_anchor_permission (line 87, python-def)
+- delete_user (line 105, python-def)
 
 ## app_service/backend/app/core/map_lifecycle.py
 
@@ -166,8 +276,9 @@
 
 ## app_service/backend/app/core/config.py
 
-- settings_customise_sources (line 32, python-def)
-- database_url (line 74, python-def)
+- settings_customise_sources (line 42, python-def)
+- _guard_prod_secrets (line 102, python-def)
+- database_url (line 126, python-def)
 
 ## app_service/backend/app/core/db.py
 
@@ -182,6 +293,14 @@
 - ensure_device_authorization_granted_by_varchar (line 74, python-def)
 - ensure_device_drop_last_reading_columns (line 105, python-def)
 - ensure_device_ui_columns (line 126, python-def)
+- ensure_device_topic_column (line 155, python-def)
+- ensure_device_publish_topic_column (line 174, python-def)
+- _column_exists (line 193, python-def)
+- ensure_anchor_phase0_columns (line 204, python-def)
+- ensure_user_cccd_varchar (line 266, python-def)
+- ensure_schema_hardening (line 305, python-def)
+- ensure_map_image_constraints (line 365, python-def)
+- normalize (line 385, nested python-def)
 
 ## app_service/backend/app/core/db_wait.py
 
@@ -212,7 +331,8 @@
 - _is_admin (line 16, python-def)
 - is_user_active (line 20, python-def)
 - can_manage_group (line 29, python-def)
-- can_view_group (line 44, python-def)
+- can_config_anchor (line 44, python-def)
+- can_view_group (line 60, python-def)
 
 ## app_service/backend/app/core/map_archive.py
 
@@ -242,17 +362,23 @@
 
 ## app_service/backend/app/main.py
 
-- lifespan (line 40, python-def)
-- create_app (line 87, python-def)
+- lifespan (line 61, python-def)
+- _handle_sensor_payload (line 120, nested python-def)
+- _resolve_ping_reply_topic (line 124, nested python-def)
+- create_app (line 177, python-def)
+
+## app_service/backend/app/models/anchor.py
+
+- _datetime_6 (line 28, python-def)
 
 ## app_service/backend/app/schemas/auth.py
 
-- cccd_digits (line 37, python-def)
-- expired_not_in_past (line 44, python-def)
+- cccd_digits (line 36, python-def)
+- expired_not_in_past (line 43, python-def)
 - validity_days (line 67, python-def)
 - remaining_days (line 75, python-def)
-- cccd_digits (line 98, python-def)
-- cccd_digits (line 131, python-def)
+- cccd_digits (line 102, python-def)
+- cccd_digits (line 135, python-def)
 
 ## app_service/src/App.jsx
 
@@ -261,6 +387,7 @@
 ## app_service/src/components/AddDeviceModal.jsx
 
 - AddDeviceModal (line 5, arrow-function)
+  - Cho phép admin chọn Gateway, xem Device ID và tự điền hai topic MQTT mặc định.
 - validateForm (line 26, arrow-function)
 - handleChange (line 47, arrow-function)
 - handleSubmit (line 54, arrow-function)
@@ -680,11 +807,12 @@
 
 ## app_service/src/contexts/AuthContext.jsx
 
-- useAuth (line 16, arrow-function)
-- AuthProvider (line 24, arrow-function)
-- login (line 53, arrow-function)
-- logout (line 66, arrow-function)
-- isAdmin (line 73, arrow-function)
+- useAuth (line 25, arrow-function)
+- AuthProvider (line 33, arrow-function)
+- loadSession (line 38, arrow-function)
+- login (line 62, arrow-function)
+- logout (line 75, arrow-function)
+- isAdmin (line 82, arrow-function)
 
 ## app_service/src/data/mockData.js
 
@@ -771,15 +899,16 @@
 
 ## app_service/src/pages/UserManagement.jsx
 
-- defaultExpiredAt (line 7, function-declaration)
-- isoToDdMmYyyy (line 14, function-declaration)
-- ddMmYyyyToIso (line 22, function-declaration)
-- todayIso (line 37, function-declaration)
-- emptyForm (line 41, arrow-function)
-- UserManagement (line 53, function-declaration)
-- openModal (line 144, arrow-function)
-- handleStatusChange (line 153, arrow-function)
-- handleRegister (line 169, arrow-function)
-- openDelete (line 220, arrow-function)
-- openAssign (line 226, arrow-function)
-- handleDelete (line 230, arrow-function)
+- defaultExpiredAt (line 8, function-declaration)
+- isoToDdMmYyyy (line 15, function-declaration)
+- ddMmYyyyToIso (line 23, function-declaration)
+- todayIso (line 38, function-declaration)
+- emptyForm (line 42, arrow-function)
+- UserManagement (line 55, function-declaration)
+- openModal (line 147, arrow-function)
+- handleStatusChange (line 156, arrow-function)
+- handleAnchorPermissionChange (line 172, arrow-function)
+- handleRegister (line 203, arrow-function)
+- openDelete (line 256, arrow-function)
+- openAssign (line 262, arrow-function)
+- handleDelete (line 266, arrow-function)

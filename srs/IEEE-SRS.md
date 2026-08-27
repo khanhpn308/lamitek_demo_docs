@@ -1,8 +1,8 @@
 # IEEE SRS - Đặc Tả Yêu Cầu Phần Mềm
 
 - **Mã tài liệu**: SRS-IOT-001
-- **Phiên bản**: 1.2.0
-- **Ngày cập nhật**: 2026-08-02
+- **Phiên bản**: 1.3.0
+- **Ngày cập nhật**: 2026-08-07
 - **Hệ thống**: IoT Management System (React + FastAPI)
 - **Trạng thái**: Bản chính thức nội bộ
 
@@ -20,6 +20,7 @@ Hệ thống hỗ trợ:
 - Quản lý người dùng, thiết bị, cấp quyền thiết bị.
 - Theo dõi dashboard tổng quan và dashboard chi tiết thiết bị.
 - Quản lý nhóm, upload ảnh bản đồ và theo dõi thiết bị realtime trên GPS map.
+- Quản lý Anchor trên bản đồ và đồng bộ cấu hình theo location xuống Gateway.
 - Khôi phục mật khẩu, đổi mật khẩu.
 - Giám sát health của API, DB và MQTT subscriber.
 
@@ -29,10 +30,16 @@ Hệ thống hỗ trợ:
 - **RBAC**: Role-Based Access Control.
 - **API**: Application Programming Interface.
 - **ADR**: Architecture Decision Record.
+- **Anchor**: Thiết bị tính toán trực tiếp với node ESP32 để suy ra vị trí rồi chuyển kết quả qua Gateway.
+- **ACK**: Acknowledgement, phản hồi của Gateway xác nhận đã áp dụng hoặc từ chối cấu hình.
+- **Transactional outbox**: Bản ghi sự kiện được lưu cùng transaction nghiệp vụ để publish MQTT tin cậy sau commit.
 
 ### 1.4 Tài liệu tham chiếu
 - `docs/api/openapi-like.yaml`
 - `docs/architecture/system-architecture.md`
+- `docs/srs/anchor-configuration-spec.md`
+- `docs/api/anchor-configuration-api.md`
+- `docs/adr/ADR-0007-phan-quyen-va-dong-bo-cau-hinh-anchor.md`
 - `docs/adr/*`
 
 ---
@@ -202,6 +209,32 @@ Hệ thống gồm frontend React (Vite) gọi backend FastAPI qua REST, backend
   - Backend chỉ negotiate tên subprotocol công khai, không echo credential.
   - Frontend production phải trả security header cho cả document và static asset.
 
+### 4.13 SF-13: Cấu hình Anchor và đồng bộ Gateway
+
+- **Trạng thái triển khai**: Phase 0–6 đã hoàn thành nền dữ liệu, API/UI, dispatcher,
+  liveness, ACK/status, lifecycle/reconciliation và rollout readiness.
+
+- **Mô tả**:
+  - Admin luôn được cấu hình Anchor; user thường chỉ được cấu hình khi
+    `can_config_anchor = 'yes'` và là owner của group chứa map.
+  - Accepted member chỉ được xem Anchor trong group đã tham gia, không được tạo, sửa,
+    kéo hoặc xóa Anchor dù có cờ `can_config_anchor`.
+  - Anchor có ID nội bộ, `mac_address` chuẩn sáu octet hexadecimal và bất biến sau khi gán,
+    tên, tọa độ phần trăm `x/y` và giá trị
+    `z`; tạo mới mặc định tại `(50, 50, 0)`.
+  - Owner/admin có thể mở cùng một giao diện chỉnh sửa từ marker trên map hoặc từ danh
+    sách Anchor có tìm kiếm và phân trang phía server.
+  - Sau mutation có thay đổi, backend lưu Anchor và delta cấu hình trong cùng transaction;
+    dispatcher compose payload versioned riêng theo revision đã ACK của từng Gateway.
+  - Gateway phản hồi ACK theo revision; backend theo dõi trạng thái tổng hợp, từng Gateway
+    và `last_seen_at` để UI polling hiển thị tiến độ đồng bộ.
+- **Ràng buộc**:
+  - `x/y` thuộc `[0, 100]`, gốc tọa độ ở góc trái dưới; `z` được lưu nhưng chưa render trên map 2D.
+  - Xóa là soft delete; `mac_address` không được tái sử dụng trong phase này.
+  - Replace rỗng có nghĩa xóa toàn bộ cấu hình Anchor tại location; delta rỗng không được tạo.
+  - MQTT dùng QoS 1, retained message và retry theo chính sách outbox; firmware Gateway
+    nằm ngoài phạm vi nhưng phải tuân thủ contract payload/ACK đã công bố.
+
 ---
 
 ## 5. Yêu cầu phi chức năng
@@ -259,6 +292,18 @@ Hệ thống gồm frontend React (Vite) gọi backend FastAPI qua REST, backend
 - `locations_deleted` chứa bản archive cùng snapshot group/owner/người thao tác,
   lý do và thời điểm xóa; không có foreign key làm mất lịch sử.
 
+### 6.5 Thực thể Anchor và outbox
+
+> Schema MySQL, migration idempotent và ORM cho các thực thể trong mục này đã được triển khai ở Phase 0.
+
+- `anchor` lưu ID nội bộ, `mac_address` duy nhất và bất biến, `hardware_id` legacy,
+  tên, `x/y/z`, map/location,
+  trạng thái active/inactive, audit timestamps và người tạo/cập nhật/xóa.
+- Tên Anchor duy nhất không phân biệt hoa/thường trong các Anchor active của cùng map.
+- Bảng revision/outbox lưu event delta/replace, target Gateway tùy chọn và trạng thái publish/retry.
+- Bảng delivery/ACK lưu payload wire bất biến và kết quả áp dụng riêng cho từng Gateway của một revision.
+- `user.can_config_anchor` nhận `yes/no`, mặc định `no`; admin không phụ thuộc cờ này.
+
 ---
 
 ## 7. Quy tắc nghiệp vụ
@@ -275,6 +320,18 @@ Hệ thống gồm frontend React (Vite) gọi backend FastAPI qua REST, backend
 - BR-09: Xóa group/owner phải archive map trước và hoàn tất atomically với việc dọn quan hệ.
 - BR-10: Seed không được làm sống lại location đã tồn tại trong lịch sử archive.
 - BR-11: JWT hoặc mật khẩu thiết bị không được truyền bằng WebSocket query string.
+- BR-12: User thường chỉ mutation Anchor khi vừa có `can_config_anchor = 'yes'` vừa là
+  owner group; accepted member luôn chỉ xem.
+- BR-13: Quyền phải được kiểm tra lại ở backend cho từng request; thu hồi cờ có hiệu lực
+  ngay và không xóa dữ liệu Anchor đã tạo.
+- BR-14: Mỗi thay đổi thực sự phải tăng revision và ghi delta cùng transaction; PATCH no-op
+  không tăng revision; publish MQTT không được làm transaction HTTP chờ broker.
+- BR-15: Mỗi Gateway active có `device_type = 'gateway'` và location chuẩn hóa khớp map
+  nhận payload coalesce riêng; Gateway mới nhận retained full replace để thiết lập baseline.
+- BR-16: Revision mới thay thế delivery cũ chưa hoàn tất theo từng Gateway; retry cùng payload theo lịch
+  `5, 15, 30, 60, 300` giây rồi mỗi 300 giây cho tới khi superseded hoặc thành công.
+- BR-17: Xóa map/group/owner phải soft-delete Anchor liên quan và phát replace rỗng
+  trong cùng lifecycle transaction.
 
 ---
 
@@ -302,6 +359,21 @@ Hệ thống gồm frontend React (Vite) gọi backend FastAPI qua REST, backend
   và kiểm thử trình duyệt nhiều vai trò đều pass.
 - AC-19: GPS hiển thị tên/ID và nhãn marker đúng fallback, tìm theo tên/ID, dùng một
   đồng hồ chung và không lộ tọa độ/timestamp từng thiết bị trên UI.
+- AC-20: Admin luôn CRUD Anchor; owner có cờ `yes` CRUD được; owner cờ `no` và accepted
+  member đều không mutation được ở cả UI và API.
+- AC-21: Tạo Anchor mặc định `(50, 50, 0)`; nhập tọa độ hoặc kéo marker cập nhật cùng
+  draft, Save mới gửi API và Cancel khôi phục trạng thái trước chỉnh sửa.
+- AC-22: Viewer thấy marker nhưng click không mở editor; editor cho phép đổi tên, vị trí
+  và xóa đối với người có quyền.
+- AC-23: Danh sách cấu hình chỉ chứa Anchor caller được sửa, hỗ trợ tìm theo tên hoặc
+  ID/hardware ID, phân trang server-side và chuyển đúng group/map khi chọn kết quả.
+- AC-24: Mutation có thay đổi tạo revision/outbox; mỗi Gateway nhận delta coalesce chỉ chứa
+  Anchor cần xử lý. Bootstrap/resync/clear map dùng full replace QoS 1 retained.
+- AC-25: ACK đúng Gateway/location/revision cập nhật trạng thái delivery; UI polling 5 giây
+  hiển thị tổng hợp và chi tiết từng Gateway, online theo ngưỡng mặc định 30 giây.
+- AC-26: Broker/Gateway offline không làm mất cấu hình; retry đúng payload, revision mới
+  coalesce/supersede theo Gateway và resync có đích tạo revision mới.
+- AC-27: Xóa map/group/owner soft-delete đủ Anchor và phát replace rỗng atomically.
 
 ---
 
@@ -320,6 +392,7 @@ Hệ thống gồm frontend React (Vite) gọi backend FastAPI qua REST, backend
 | SF-10 | `/api/map-groups/{group_id}/maps`, `/api/maps/*`, `GPSDashboard`, `UploadMapDialog`, `DeletedMapsPanel` |
 | SF-11 | `map_lifecycle.py`, `seed.py`, `DELETE /api/map-groups/{group_id}`, `DELETE /api/users/{user_id}` |
 | SF-12 | `deps.py`, `websocket_routes.py`, `realtime_hub.py`, `wsUrl.js`, `GPSPage`, `nginx/prod*.conf` |
+| SF-13 | `/api/anchors*`, `/api/anchor-sync*`, Anchor editor/list, transactional outbox, MQTT `anchor_config.v1`/ACK |
 
 ---
 
@@ -327,3 +400,7 @@ Hệ thống gồm frontend React (Vite) gọi backend FastAPI qua REST, backend
 
 - Frontend đang có fallback mock data ở một số màn hình.
 - Modal đổi password thiết bị hiện thiên về mock UI, chưa có API đổi mật khẩu thiết bị riêng.
+- Firmware Gateway áp dụng `anchor_config.v1` và phát ACK chưa thuộc repository này; cần
+  kiểm thử contract tích hợp trước khi rollout production.
+- Outbox có thể tích lũy khi broker hoặc Gateway offline dài ngày; cần metric, cảnh báo và
+  chính sách lưu trữ/vận hành trước khi go-live.

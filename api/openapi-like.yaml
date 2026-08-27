@@ -15,8 +15,10 @@ tags:
   - name: authorizations
   - name: map-groups
   - name: maps
+  - name: anchors
   - name: health
   - name: mqtt
+  - name: pings
   - name: test
   - name: websocket
 paths:
@@ -945,6 +947,48 @@ paths:
         "403":
           description: Không có quyền admin
 
+  /api/pings/{device_id}/summary:
+    get:
+      tags: [pings]
+      summary: Thống kê application-level ping theo catalog device (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: device_id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Aggregate totals và payload mới nhất theo database ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PingSummaryResponse"
+        "403": { description: Chỉ admin }
+        "404": { description: Device not found }
+
+  /api/pings/{device_id}:
+    delete:
+      tags: [pings]
+      summary: Xóa atomic payload/missing history và reset predicted order (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: device_id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Counts đã xóa; gọi lại trên zero state vẫn thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PingDeleteResponse"
+        "403": { description: Chỉ admin }
+        "404": { description: Device not found }
+
 # WebSocket không thuộc OpenAPI 3 chuẩn cho FastAPI, nên không xuất hiện trong /openapi.json và Swagger UI.
 # Để vẫn có tài liệu trong file này, dùng extension key `x-websocket-paths` bên dưới.
 x-websocket-paths:
@@ -990,8 +1034,11 @@ x-websocket-paths:
     tag: websocket
     summary: Kết nối WebSocket 2 chiều cho ESP32
     description: |
-      Device gửi telemetry dạng JSON hoặc binary frame.
-      Server trả ack/pong/echo, đồng thời duy trì kết nối theo device_id.
+      Gateway gửi telemetry hoặc application-level JSON ping dạng text/binary UTF-8.
+      URL device_id là danh tính Gateway dùng để xác thực; PingMessage.device_id là Node nguồn
+      và không bắt buộc trùng URL ID. Node ID không thay thế cơ chế xác thực WebSocket.
+      Ping hợp lệ được persist/commit rồi echo exact raw frame; không đi telemetry, Influx hay
+      presence và không cập nhật last_seen_at. WebSocket legacy PING| không còn special-case echo.
     authentication:
       deviceSubprotocols: [iot-device, "<device-password>"]
       deviceHeader: "x-device-password: <device-password>"
@@ -1003,21 +1050,110 @@ x-websocket-paths:
         example: "101"
     clientToServerMessage:
       oneOf:
+        - $ref: "#/components/schemas/PingMessage"
         - $ref: "#/components/schemas/Esp32TelemetryMessage"
         - type: string
-          description: Text bất kỳ (server echo lại)
+          description: Telemetry text hiện có; JSON ping hợp lệ echo exact raw text sau DB commit
         - type: string
           format: binary
-          description: Binary frame (server phản hồi độ dài bytes)
+          description: Binary UTF-8 JSON ping hợp lệ echo exact raw bytes; binary khác giữ pipeline cũ
     serverToClientMessage:
       oneOf:
         - $ref: "#/components/schemas/Esp32AckMessage"
         - $ref: "#/components/schemas/Esp32PongMessage"
+        - $ref: "#/components/schemas/PingMessage"
+        - $ref: "#/components/schemas/PingErrorMessage"
     test:
       url: ws://localhost:8000/api/ws/esp32/101
       notes:
-        - Có thể gửi `{}` để nhận ack.
-        - Có thể gửi chuỗi rỗng để nhận pong.
+        - JSON ping text/binary giữ nguyên frame type và raw bytes khi echo.
+        - Ping lỗi nhận text PingErrorMessage và connection vẫn sống.
+
+  /api/ws/pings:
+    tag: websocket
+    summary: Event thống kê Ping dành riêng cho admin
+    description: |
+      Canonical admin channel; `/ws/pings` là alias tương thích. Event chỉ phát sau ping/delete
+      commit, không chứa raw payload hoặc credential và không đi global/device telemetry groups.
+    authentication:
+      browserSubprotocols: [iot-jwt, "<jwt>"]
+      negotiatedSubprotocol: iot-jwt
+      role: admin
+      queryCredentialsAllowed: false
+      nonAdminCloseCode: 1008
+    serverToClientMessage:
+      $ref: "#/components/schemas/PingStatsUpdatedEvent"
+
+  /api/locations/{location_id}/anchors:
+    get:
+      tags: [anchors]
+      summary: Danh sách Anchor active mà caller được xem
+      responses:
+        "200": { description: Danh sách Anchor theo anchor_id }
+        "404": { description: Location ngoài scope }
+    post:
+      tags: [anchors]
+      summary: Tạo Anchor và transactional delta outbox
+      responses:
+        "201": { description: Anchor và config revision pending }
+        "403": { description: Thiếu quyền config Anchor }
+        "409": { description: Trùng hardware ID hoặc tên active }
+
+  /api/anchors/{anchor_id}:
+    get:
+      tags: [anchors]
+      summary: Chi tiết Anchor trong view scope
+      responses:
+        "200": { description: Anchor }
+        "404": { description: Không tồn tại hoặc ngoài scope }
+    patch:
+      tags: [anchors]
+      summary: Sửa name/x/y/z; chỉ tạo delta revision khi dữ liệu thay đổi
+      responses:
+        "200": { description: Anchor và config revision pending }
+        "403": { description: Thiếu quyền config Anchor }
+    delete:
+      tags: [anchors]
+      summary: Soft-delete Anchor và tạo delta delete
+      responses:
+        "200": { description: Deleted Anchor ID và config revision }
+
+  /api/anchors/manage:
+    get:
+      tags: [anchors]
+      summary: Search/filter/pagination Anchor có quyền cấu hình
+      responses:
+        "200": { description: Page data/total/limit/offset }
+
+  /api/locations/{location_id}/anchor-config-status:
+    get:
+      tags: [anchors]
+      summary: Aggregate và trạng thái đồng bộ từng Gateway
+      responses:
+        "200": { description: synced/partial/pending/error/no_gateway }
+        "403": { description: Thiếu quyền config Anchor }
+
+  /api/locations/{location_id}/gateways/{gateway_id}/anchor-config-resync:
+    post:
+      tags: [anchors]
+      summary: Tạo full replace revision chỉ cho Gateway được chọn
+      responses:
+        "202": { description: Config revision pending }
+        "404": { description: Gateway không active/không thuộc location }
+
+  /api/locations/{location_id}/anchor-config-resync:
+    post:
+      tags: [anchors]
+      summary: Endpoint resync toàn location đã ngừng sử dụng
+      responses:
+        "410": { description: Dùng endpoint resync có gateway_id }
+
+  /api/map-groups/{group_id}/invitations/bulk:
+    post:
+      tags: [map-groups]
+      summary: Mời tối đa 50 username với partial results
+      responses:
+        "200": { description: invited_count/error_count/results }
 
 components:
   securitySchemes:
@@ -1340,12 +1476,21 @@ components:
           nullable: true
         user_device_asignment_id:
           type: integer
+        location:
+          type: string
+          nullable: true
+        device_type:
+          type: string
+          nullable: true
+          description: Khi là gateway, topic trống được sinh tự động từ device_id.
         topic:
           type: string
           nullable: true
+          description: Gateway mặc định gateway/{device_id}/backend_receive.
         publish_topic:
           type: string
           nullable: true
+          description: Gateway mặc định gateway/{device_id}/backend_send.
     DevicePublic:
       type: object
       properties:
@@ -1611,3 +1756,78 @@ components:
         device_id:
           type: string
           example: "101"
+    PingMessage:
+      type: object
+      additionalProperties: false
+      required: [device_id, sensor_type, order, size, payload, location, timestamp]
+      description: |
+        Strict application-level Node ping. `size` phải bằng UTF-8 byte length của `payload`;
+        `timestamp` là Node uptime milliseconds, không phải Unix time.
+      properties:
+        device_id:
+          type: string
+          pattern: "^[1-9][0-9]*$"
+          example: "101"
+        sensor_type:
+          type: string
+          enum: [ping]
+        order:
+          type: integer
+          minimum: 1
+          maximum: 4294967295
+        size:
+          type: integer
+          minimum: 1
+          maximum: 16384
+        payload:
+          type: string
+          example: BCDEFGHI
+        location:
+          type: string
+        timestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          example: 12345
+    PingErrorMessage:
+      type: object
+      required: [ok, type, message]
+      properties:
+        ok: { type: boolean, enum: [false] }
+        type: { type: string, enum: [ping_error] }
+        message: { type: string, description: Lỗi validation/persistence đã redacted }
+    PingCurrentPayload:
+      type: object
+      required: [id, order, timestamp]
+      properties:
+        id: { type: integer, format: int64 }
+        order: { type: integer, minimum: 1, maximum: 4294967295 }
+        timestamp: { type: integer, format: int64, minimum: 0, description: Node uptime ms }
+    PingSummaryResponse:
+      type: object
+      required: [device_id, total_payload, current_payload, total_missing_payload]
+      properties:
+        device_id: { type: string }
+        total_payload: { type: integer, minimum: 0 }
+        current_payload:
+          allOf:
+            - $ref: "#/components/schemas/PingCurrentPayload"
+          nullable: true
+        total_missing_payload: { type: integer, minimum: 0 }
+    PingDeleteResponse:
+      type: object
+      required: [ok, device_id, deleted_payloads, deleted_missing_payloads, predicted_order]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        device_id: { type: string }
+        deleted_payloads: { type: integer, minimum: 0 }
+        deleted_missing_payloads: { type: integer, minimum: 0 }
+        predicted_order: { type: integer, enum: [1] }
+    PingStatsUpdatedEvent:
+      type: object
+      additionalProperties: false
+      required: [type, device_id, reason]
+      properties:
+        type: { type: string, enum: [ping_stats_updated] }
+        device_id: { type: string, example: "101" }
+        reason: { type: string, enum: [received, cleared] }

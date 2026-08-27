@@ -1,8 +1,8 @@
 # Tài Liệu Kiến Trúc Hệ Thống
 
 - **Mã tài liệu**: ARCH-IOT-001
-- **Phiên bản**: 1.4.0
-- **Ngày cập nhật**: 2026-08-02
+- **Phiên bản**: 1.5.0
+- **Ngày cập nhật**: 2026-08-07
 
 ## 1. Mục tiêu kiến trúc
 
@@ -19,8 +19,11 @@ flowchart LR
   TrinhDuyet -->|HTTP REST /api| Backend[FastAPI]
   TrinhDuyet -->|WSS + JWT subprotocol| Backend
   Backend -->|ORM| MySQL[(MySQL)]
-  Backend --> MQTT[(MQTT Broker)]
+  Backend -->|Ghi transaction| Outbox[(Anchor Outbox)]
+  Outbox -->|QoS 1 + retained| MQTT[(MQTT Broker)]
   MQTT --> Backend
+  MQTT --> Gateway[Gateway]
+  Gateway -->|ACK + telemetry| MQTT
 ```
 
 ## 3. Thành phần chính
@@ -41,6 +44,9 @@ flowchart LR
   - Quản lý nghiệp vụ phân quyền và trạng thái user.
   - Cung cấp policy quyền nhóm map, upload/xác thực WebP/PNG/JPEG, phân phối BLOB và archive transaction cho GPS Tracking.
   - Điều phối lifecycle khi xóa group/owner và seed floorplan hệ thống idempotent.
+  - Cung cấp Anchor CRUD/list theo policy admin hoặc owner có cờ cấu hình.
+  - Ghi revision/delta vào transactional outbox, compose payload riêng theo Gateway; dùng full replace cho bootstrap/resync và xử lý ACK.
+  - Theo dõi `last_seen_at`, trạng thái online và kết quả đồng bộ của từng Gateway.
   - Kết nối DB.
   - Khởi tạo và giám sát MQTT subscriber.
 
@@ -54,6 +60,16 @@ flowchart LR
   - `map_group_membership`
   - `locations_using`
   - `locations_deleted`
+  - `anchor`
+  - `anchor_config_outbox`
+  - `anchor_config_delivery`
+
+Phase 0 đã hiện thực các bảng/cột trên, ORM, startup patch và settings. Phase 1 đã
+hiện thực permission API/helper và UI quản trị cờ user. Phase 2 đã hiện thực Anchor
+CRUD, full-snapshot outbox và editor/marker trên map. Phase 3 đã thêm management search,
+list-to-map navigation và bulk invitations. Publisher, ACK consumer và status
+Dispatcher, ACK/status API và UI Gateway trong sơ đồ dưới đây đã chạy từ Phase 4;
+lifecycle/reconciliation khi thay đổi map/Gateway được hoàn thiện ở Phase 5.
 
 #### Lưu trữ ảnh bản đồ
 
@@ -66,6 +82,10 @@ flowchart LR
 - Subscriber khởi tạo trong lifecycle backend.
 - Lưu tạm message gần nhất bằng buffer trong bộ nhớ.
 - Cung cấp API quan sát trạng thái và message.
+- Snapshot Anchor được publish QoS 1, retained theo location; một revision được gửi tới
+  mọi Gateway active có location tương ứng.
+- Gateway gửi ACK versioned; subscriber kiểm tra Gateway, location và revision trước khi
+  cập nhật delivery. Telemetry/ACK cũng cập nhật liveness có throttle ghi DB 5 giây.
 
 ## 4. Luồng hệ thống trọng yếu
 
@@ -139,6 +159,55 @@ flowchart LR
    `x-device-password`.
 4. Credential trong query string bị từ chối để URL/access log không chứa secret.
 
+### 4.9 Luồng cấu hình Anchor
+
+```mermaid
+sequenceDiagram
+  actor U as Owner/Admin
+  participant F as Frontend
+  participant B as FastAPI
+  participant D as MySQL
+  participant M as MQTT
+  participant G as Gateway(s)
+
+  U->>F: Tạo/sửa/kéo/xóa Anchor rồi Save
+  F->>B: REST mutation + JWT
+  B->>B: Kiểm tra admin hoặc owner + can_config_anchor
+  B->>D: Ghi Anchor + revision + delta/outbox
+  D-->>B: Commit
+  B-->>F: Anchor và sync revision
+  B->>M: Compose theo Gateway, publish QoS 1 retained
+  M-->>G: anchor_config.v1 delta hoặc replace có đích
+  G->>M: anchor_config_ack.v1
+  M-->>B: ACK theo gateway/location/revision
+  B->>D: Cập nhật delivery và last_seen_at
+  F->>B: Poll trạng thái mỗi 5 giây
+  B-->>F: Trạng thái tổng hợp + từng Gateway
+```
+
+- Request REST chỉ thành công sau khi dữ liệu và outbox commit, không chờ broker/Gateway.
+- Mutation thường chỉ gửi Anchor `upsert`/`delete`; full replace chỉ dùng cho bootstrap,
+  resync đúng Gateway hoặc xóa map. PATCH no-op không tạo revision.
+
+### 4.10 Luồng application-level Ping
+
+1. Gateway xác thực `/api/ws/esp32/{gateway_id}` rồi chuyển nguyên text/binary JSON của Node.
+2. Backend nhận dạng đúng `sensor_type="ping"`, strict validate và persist ping/missing trong
+   worker thread; URL Gateway ID không thay thế Node `device_id` trong payload.
+3. Sau DB commit, backend echo exact raw frame về Gateway rồi phát redacted
+   `ping_stats_updated` vào dedicated admin group; ping không đi Influx, telemetry hoặc
+   presence và không cập nhật `last_seen_at`.
+4. Admin đọc aggregate/latest bằng REST và có thể atomic clear theo device. Delete commit
+   xong mới phát `reason="cleared"`; global/device dashboard không nhận event này.
+5. Frontend admin `/ping` tải catalog, giữ một summary request in-flight cho mỗi selection và
+   coalesce event burst. Response của selection cũ không được ghi đè selection hiện tại; non-admin
+   bị chặn ở cả route frontend và REST/WebSocket backend.
+- Revision mới coalesce và supersede delivery cũ chưa hoàn tất theo từng Gateway; worker retry sau `5, 15, 30, 60, 300`
+  giây rồi mỗi 300 giây.
+- User accepted trong group chỉ xem marker; click không mở editor. Map binding của Anchor
+  bất biến, muốn chuyển map phải xóa và tạo lại.
+- Xóa map/group/owner soft-delete Anchor và tạo replace rỗng trong cùng lifecycle transaction.
+
 ## 5. Quan điểm triển khai
 
 - Frontend và backend triển khai độc lập.
@@ -151,6 +220,10 @@ flowchart LR
 
 - **Rủi ro**: Một số màn hình còn phụ thuộc mock data fallback.
   - **Hướng xử lý**: Chuẩn hóa toàn bộ luồng sang API thật.
+- **Rủi ro**: Broker hoặc Gateway offline làm delivery chậm và outbox tích lũy.
+  - **Hướng xử lý**: Retained delta/replace, retry có backoff, coalesce theo ACK Gateway, metric và cảnh báo backlog.
+- **Rủi ro**: Firmware Gateway chưa triển khai đúng payload/ACK versioned.
+  - **Hướng xử lý**: Contract test với simulator trước, sau đó kiểm thử tích hợp firmware trên staging.
 
 ## 7. Đọc thêm: hướng dẫn chi tiết trong mã nguồn
 
@@ -158,4 +231,7 @@ flowchart LR
 - **[map-webp-phase1.md](./map-webp-phase1.md)** — schema, access policy, validator, archive transaction và phạm vi Phase 1.
 - **[map-webp-phase4.md](./map-webp-phase4.md)** — cascade group/account, owner visibility và seed map hệ thống.
 - **[map-webp-phase5.md](./map-webp-phase5.md)** — regression, WebSocket credential hardening và xác nhận production.
+- **[Đặc tả cấu hình Anchor](../srs/anchor-configuration-spec.md)** — nghiệp vụ, quyền và tiêu chí chấp nhận.
+- **[API/MQTT Anchor](../api/anchor-configuration-api.md)** — hợp đồng REST, snapshot và ACK.
+- **[ADR-0007](../adr/ADR-0007-phan-quyen-va-dong-bo-cau-hinh-anchor.md)** — quyết định quyền theo owner và transactional outbox.
 - Trong repo, các module Python chính có **module docstring**; hàm/route quan trọng có **docstring** giải thích vai trò. Frontend: **JSDoc** tại `main.jsx`, `App.jsx`, `IoTApp.jsx`, `AuthContext.jsx`, `lib/api.js`, các route guard và `Layout.jsx`.

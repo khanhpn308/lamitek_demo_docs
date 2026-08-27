@@ -3,7 +3,7 @@
 - **Trạng thái**: Accepted; phần định dạng/kích thước/dung lượng upload được
   thay thế bởi [ADR-0006](ADR-0006-hop-dong-upload-anh-ban-do.md)
 - **Ngày**: 2026-07-22
-- **Người quyết định**: Nhóm phát triển IoT Management
+- **Người quyết định**: Phạm Ngọc Khánh
 
 ## Bối cảnh
 

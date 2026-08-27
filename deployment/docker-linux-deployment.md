@@ -455,6 +455,58 @@ docker compose exec db mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABAS
 
 **Lưu ý:** `docker compose up -d` **không** thay thế bước trên — nó chỉ đảm bảo container MySQL chạy; không import lại toàn bộ `sql/` vào DB cũ.
 
+### 9.2.1 Migration 015 — application-level Ping
+
+Migration additive cho tính năng Ping là:
+
+- `database_service/sql/015_ping_payload_tracking.sql`
+- rollback: `database_service/sql/015_ping_payload_tracking.rollback.sql`
+
+Trước khi chạy trên database đang có dữ liệu, bắt buộc tạo backup có thể restore và kiểm tra file
+backup không rỗng:
+
+```bash
+cd ~/database_service
+set -a && source .env && set +a
+mkdir -p backups
+docker compose exec -T db mysqldump \
+  -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
+  > "backups/pre-ping-015-$(date +%Y%m%d-%H%M%S).sql"
+test -s "$(ls -1t backups/pre-ping-015-*.sql | head -1)"
+```
+
+Áp dụng migration 015 lên volume/database hiện hữu:
+
+```bash
+docker compose exec -T db mysql \
+  -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
+  < sql/015_ping_payload_tracking.sql
+```
+
+Xác minh schema và index sau migration:
+
+```bash
+docker compose exec db mysql \
+  -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
+  -e "SHOW CREATE TABLE ping_payload\G; SHOW CREATE TABLE missing_ping_payload\G"
+```
+
+Máy DB mới với volume trống cũng nhận hai bảng qua `schema.sql`/init scripts. Migration dùng
+`CREATE TABLE IF NOT EXISTS`, nhưng không thay thế việc kiểm tra schema/index trên database đã tồn tại.
+
+> **Cảnh báo rollback mất dữ liệu:** script rollback drop `missing_ping_payload` trước rồi
+> `ping_payload`; toàn bộ lịch sử received/missing Ping sẽ bị xóa. Chỉ chạy khi đã có backup và đã
+> chấp nhận data loss. Rollback code mà không drop bảng là lựa chọn an toàn hơn nếu chỉ cần tắt tính năng.
+
+```bash
+docker compose exec -T db mysql \
+  -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
+  < sql/015_ping_payload_tracking.rollback.sql
+```
+
+Sau khi deploy app, restart backend rồi dùng admin REST summary để kiểm tra read path. Không gửi
+payload thử vào device production nếu chưa có kế hoạch dọn dữ liệu thử nghiệm.
+
 ### 9.3 Máy chủ App — kéo mã và build frontend
 
 ```bash

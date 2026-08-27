@@ -182,6 +182,12 @@ void loop() {
 
 - Tạo mới thiết bị.
 - Có thể truyền thêm `topic` để lưu topic MQTT nhận mặc định cho thiết bị và `publish_topic` để lưu topic MQTT gửi/echo về thiết bị.
+- Khi `device_type="gateway"`, nếu hai topic để trống backend tự gán:
+  - `topic = gateway/{device_id}/backend_receive`: Gateway publish ACK/telemetry, backend subscribe.
+  - `publish_topic = gateway/{device_id}/backend_send`: backend publish cấu hình, Gateway subscribe.
+- Topic nhập rõ trong request được giữ nguyên. Uplink topic được subscribe ngay trong runtime sau
+  khi tạo thành công, không cần restart backend.
+- UI **Devices → Add New Device** có loại **Gateway**, hiển thị trước Device ID và hai topic mặc định.
 
 ### GET `/devices/my`
 
@@ -394,6 +400,62 @@ Tất cả endpoint yêu cầu JWT Bearer.
 - Hai endpoint frontend dùng subprotocol `["iot-jwt", token]`; URL không chứa token.
 - Payload realtime chuẩn hóa gồm: `device_id`, `sensor_type`, `temperature`, `vibration`, `voltage`, `current`, `ts`, `ts_iso`.
 
+### WebSocket ESP32/Gateway application-level ping
+
+- Endpoint: `ws://<host>/api/ws/esp32/{device_id}`. URL `device_id` là Gateway/thiết bị
+  đang xác thực; dùng subprotocol `["iot-device", "<device-password>"]` hoặc header
+  `x-device-password` theo cơ chế hiện có.
+- JSON có `sensor_type` chính xác bằng `"ping"` được validate strict: Node `device_id` decimal
+  dương, `order` 1–4294967295, `size` 1–16384 và bằng UTF-8 byte length của `payload`,
+  `timestamp` là uptime millisecond không âm; mọi field bắt buộc và cấm field dư.
+- Sau khi DB commit thành công, text frame được echo nguyên raw text và binary UTF-8 JSON
+  được echo nguyên raw bytes; backend không reserialize hoặc đổi frame type.
+- Ping lỗi trả text `{ "ok": false, "type": "ping_error", "message": "..." }`, không đóng
+  connection và không đi ACK, presence, Influx/telemetry pipeline.
+- `sensor_type` phân biệt hoa/thường. `"PING"` là telemetry thường. WebSocket `PING|...`
+  không còn raw echo đặc biệt; quy tắc legacy này chỉ còn ở MQTT.
+
+Text frame ví dụ (server echo chính xác chuỗi này sau commit, không reserialize):
+
+```json
+{"device_id":"101","sensor_type":"ping","order":1,"size":8,"payload":"BCDEFGHI","location":"","timestamp":12345}
+```
+
+Binary frame chứa cùng JSON UTF-8 được validate bằng schema giống text và echo nguyên binary bytes.
+`timestamp` trong message và REST summary luôn là Node uptime milliseconds; không chuyển trực tiếp
+thành datetime và không dùng thay thời gian backend.
+
+Persistence MySQL migration 015:
+
+- `ping_payload`: auto-increment `id`, catalog `device_id`, `cycle_id`, Node `order` và
+  `node_timestamp_ms`; duplicate/out-of-order vẫn có thể được lưu.
+- `missing_ping_payload`: auto-increment `id`, `payload_id` mang nghĩa missing order (không phải FK
+  tới `ping_payload.id`), catalog `device_id` và `cycle_id`; unique theo device/cycle/missing order.
+
+### REST thống kê Ping (admin)
+
+- `GET /api/pings/{device_id}/summary` trả `device_id`, `total_payload`,
+  `current_payload` (`id`, `order`, Node uptime `timestamp`) và `total_missing_payload`.
+  Current payload là row có database `id` mới nhất; device chưa có ping trả totals `0` và
+  `current_payload: null`.
+- `DELETE /api/pings/{device_id}` xóa atomically payload/missing history của device và trả
+  `deleted_payloads`, `deleted_missing_payloads`, `predicted_order: 1`. Gọi lại khi không có
+  data vẫn trả `200` với counts `0`.
+- Cả hai endpoint yêu cầu admin JWT: user thường nhận `403`; catalog device không tồn tại
+  nhận `404 Device not found`.
+- Sau ping commit/raw echo hoặc delete commit, backend phát event admin-only qua canonical
+  `/api/ws/pings` (alias `/ws/pings`) với JWT subprotocol `iot-jwt`:
+
+  ```json
+  { "type": "ping_stats_updated", "device_id": "101", "reason": "received" }
+  ```
+
+  `reason` là `received` hoặc `cleared`. Event không chứa raw payload/credential và không đi
+  global/device telemetry groups; user không phải admin bị close `1008`.
+
+Frontend admin `/ping` gọi catalog `/api/devices?limit=1000`, summary của selection hiện tại và
+kết nối `/ws/pings`. Event burst được coalesce; stale response của selection cũ không ghi đè UI.
+
 ## 9. Ma trận mã lỗi
 
 - `200`: Thành công.
@@ -414,3 +476,27 @@ Tất cả endpoint yêu cầu JWT Bearer.
   - xem topic runtime đang subscribe,
   - cập nhật `device.topic` và `device.publish_topic` theo từng thiết bị,
   - đồng bộ subscribe runtime ngay sau khi lưu.
+
+## 11. Cấu hình Anchor (đã triển khai end-to-end)
+
+> Schema, permission, CRUD/management, bulk invitations, MQTT dispatcher, liveness,
+> ACK/status-resync và lifecycle/reconciliation đã hoàn thành qua Phase 5.
+> Hợp đồng chi tiết và payload mẫu nằm tại
+> [anchor-configuration-api.md](./anchor-configuration-api.md).
+
+- Admin cập nhật quyền qua `PATCH /users/{user_id}/anchor-permission`; user profile trả
+  thêm `can_config_anchor`.
+- Viewer lấy marker bằng `GET /locations/{location_id}/anchors` khi có quyền xem group.
+- Admin hoặc owner group có `can_config_anchor = 'yes'` dùng:
+  - `POST /locations/{location_id}/anchors` để tạo tại mặc định `(50, 50, 0)` hoặc tọa độ chỉ định;
+  - `GET/PATCH/DELETE /anchors/{anchor_id}` để xem, sửa hoặc soft-delete;
+  - `GET /anchors/manage` để tìm kiếm/phân trang các Anchor có quyền chỉnh sửa.
+- `GET /locations/{location_id}/anchor-config-status` trả trạng thái tổng hợp và từng
+  Gateway; `POST /locations/{location_id}/gateways/{gateway_id}/anchor-config-resync`
+  tạo full replace chỉ cho Gateway được chọn.
+- `POST /map-groups/{group_id}/invitations/bulk` nhận nhiều username và trả kết quả
+  riêng từng người; người được mời vẫn phải accept.
+- Mutation có thay đổi ghi delta `anchor_config.v1`; dispatcher coalesce payload riêng theo
+  revision đã ACK của từng Gateway rồi publish MQTT QoS 1 retained. Bootstrap/resync dùng
+  full replace có đích. Gateway phản hồi `anchor_config_ack.v1` theo
+  `gateway_id + location_id + revision`.
